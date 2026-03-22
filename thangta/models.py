@@ -142,6 +142,15 @@ class Match(models.Model):
     # 4. Winner Selection
     winner = models.ForeignKey(Participant, related_name='matches_won', on_delete=models.SET_NULL, null=True, blank=True)
     is_completed = models.BooleanField(default=False)
+    
+    @property
+    def full_category_name(self):
+        """Creates a clean string for the results grouping using raw fields"""
+        # We use .replace() and .title() to make backend strings like 'PHUNABA_AMA' look like 'Phunaba Ama'
+        event = self.event_type.replace('_', ' ').title()
+        gender = self.gender.title()
+        
+        return f"{event} | {gender} | {self.age_category} | {self.weight_category}"
 
     def __str__(self):
         blue_name = self.participant_blue.name if self.participant_blue else "BYE"

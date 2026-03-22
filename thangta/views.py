@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.db.models import Q
 from django.contrib import messages
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView, TemplateView
-
+from django.db.models import Count
 # --- 2. LOCAL IMPORTS ---
 from .models import Tournament, Participant, CustomUser, Match
 from .forms import TournamentForm, ParticipantFilterForm, OfficialCreationForm, FixtureGenerationForm
@@ -224,74 +224,21 @@ from .models import Tournament, Match
 from .permissions import admin_required
 from .services import generate_next_round
 
+# thangta/views.py
+
 @admin_required
 def tournament_matches(request, tournament_id):
     tournament = get_object_or_404(Tournament, id=tournament_id)
     
-    # 1. Find all distinct rounds that exist for this tournament
-    # We convert to a set and back to a sorted list to get unique rounds like [1, 2, 3]
-    rounds_list = Match.objects.filter(tournament=tournament).values_list('round_number', flat=True)
-    rounds = sorted(list(set(rounds_list)))
-    
-    # 2. Get the requested round from the URL (e.g., ?round=2). Default to the latest round.
-    current_round = int(request.GET.get('round', rounds[-1] if rounds else 1))
-    
-    # 3. Filter matches to ONLY show the selected round
-    matches = Match.objects.filter(tournament=tournament, round_number=current_round).order_by(
-        'ring_number', 'event_type', 'gender', 'age_category', 'weight_category', 'match_sequence'
+    # Fetch ALL matches for this tournament, ordered by round and sequence
+    matches = Match.objects.filter(tournament=tournament).order_by(
+        'round_number', 'event_type', 'gender', 'age_category', 'weight_category', 'match_sequence'
     )
-    
-    # 4. Check if ALL matches in this specific round are completed
-    # If there are matches, and NONE of them are incomplete, it's safe to advance!
-    can_generate_next_round = matches.exists() and not matches.filter(is_completed=False).exists()
     
     return render(request, 'tournament_matches.html', {
         'tournament': tournament,
         'matches': matches,
-        'rounds': rounds,
-        'current_round': current_round,
-        'can_generate_next_round': can_generate_next_round
     })
-
-@admin_required
-def generate_next_round_all(request, tournament_id, current_round):
-    """Master button logic: Generates the next round for ALL categories in the current round."""
-    tournament = get_object_or_404(Tournament, id=tournament_id)
-    
-    if request.method == 'POST':
-        # Find all unique categories that fought in this round
-        matches_in_round = Match.objects.filter(tournament=tournament, round_number=current_round)
-        categories = matches_in_round.values(
-            'event_type', 'age_category', 'weight_category', 'gender', 'ring_number'
-        ).distinct()
-        
-        success_count = 0
-        
-        # Run your algorithm for every single category
-        for cat in categories:
-            success, msg = generate_next_round(
-                tournament=tournament,
-                event_type=cat['event_type'],
-                age_category=cat['age_category'],
-                weight_category=cat['weight_category'],
-                gender=cat['gender'],
-                current_round=current_round,
-                ring_number=cat['ring_number']
-            )
-            if success:
-                success_count += 1
-                
-        if success_count > 0:
-            messages.success(request, f"🔥 Successfully generated Round {current_round + 1} for {success_count} categories!")
-        else:
-            messages.info(request, "Tournament complete! No more matches to generate.")
-            
-    # Redirect back to the matches page, automatically jumping to the NEW round tab!
-    url = reverse('tournament-matches', args=[tournament.id])
-    return redirect(f"{url}?round={current_round + 1}")
-
-
-
 
 # thangta/views.py
 from django.shortcuts import get_object_or_404, redirect, render
@@ -299,36 +246,74 @@ from django.contrib import messages
 from .models import Match, Participant
 from .permissions import admin_required
 
+# thangta/views.py
+from django.urls import reverse
+from .services import generate_next_round
+
 @admin_required
 def update_match_winner(request, match_id):
     match = get_object_or_404(Match, id=match_id)
     
-    # If it's a BYE or already finished, send them back to the list
     if match.is_completed:
         messages.info(request, "This match is already completed.")
         return redirect('tournament-matches', tournament_id=match.tournament.id)
 
     if request.method == 'POST':
-        # Grab the ID of the participant they clicked
         winner_id = request.POST.get('winner_id')
         
         if winner_id:
             winner = get_object_or_404(Participant, id=winner_id)
             
-            # Security check: Make sure the chosen winner is actually in this match!
             if winner == match.participant_red or winner == match.participant_blue:
+                # 1. Save the winner
                 match.winner = winner
                 match.is_completed = True
                 match.save()
                 
-                messages.success(request, f"🏆 {winner.name} declared as the winner!")
-                return redirect('tournament-matches', tournament_id=match.tournament.id)
+                # 2. AUTOMATION CHECK: Are all matches for THIS category in THIS round finished?
+                category_matches = Match.objects.filter(
+                    tournament=match.tournament,
+                    event_type=match.event_type,
+                    gender=match.gender,
+                    age_category=match.age_category,
+                    weight_category=match.weight_category,
+                    round_number=match.round_number
+                )
+                
+                # If no matches in this category are pending...
+                if not category_matches.filter(is_completed=False).exists():
+                    
+                    # If there was more than 1 match, it wasn't the final, so auto-generate the next round!
+                    if category_matches.count() > 1:
+                        success, msg = generate_next_round(
+                            tournament=match.tournament,
+                            event_type=match.event_type,
+                            age_category=match.age_category,
+                            weight_category=match.weight_category,
+                            gender=match.gender,
+                            current_round=match.round_number,
+                            ring_number=match.ring_number
+                        )
+                        
+                        if success:
+                            messages.success(request, f"🏆 {winner.name} wins! Round {match.round_number + 1} automatically generated!")
+                            # Jump straight to the new round tab!
+                            url = reverse('tournament-matches', args=[match.tournament.id])
+                            return redirect(f"{url}?round={match.round_number + 1}")
+                            
+                    else:
+                        messages.success(request, f"🏆 {winner.name} wins the Final! Category Complete.")
+                else:
+                    messages.success(request, f"🏆 {winner.name} declared as the winner!")
+                
+                # Default redirect back to the current round tab
+                url = reverse('tournament-matches', args=[match.tournament.id])
+                return redirect(f"{url}?round={match.round_number}")
+                
             else:
                 messages.error(request, "Invalid winner selected.")
 
     return render(request, 'match_update_score.html', {'match': match})
-
-
 
 
 # thangta/views.py
@@ -371,3 +356,29 @@ def auto_generate_next_round(request, match_id):
     # Redirect right back to the matches page!
     return redirect('tournament-matches', tournament_id=reference_match.tournament.id)
 
+# thangta/views.py
+
+# Note: We are NOT using @admin_required here so that standard users/judges can view results too!
+from django.contrib.auth.decorators import login_required
+
+@login_required(login_url='login')
+def tournament_results(request, tournament_id):
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Fetch ONLY completed matches
+    completed_matches = Match.objects.filter(
+        tournament=tournament, 
+        is_completed=True
+    ).order_by(
+        'event_type', 
+        'gender', 
+        'age_category', 
+        'weight_category', 
+        '-round_number' # The negative sign (-) puts the highest rounds (Finals) at the top!
+    )
+    
+    return render(request, 'tournament_results.html', {
+        'tournament': tournament,
+        'completed_matches': completed_matches
+    })
+    

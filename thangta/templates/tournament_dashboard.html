@@ -58,7 +58,7 @@
                             </form>
                             
                         {% else %}
-                            <a href="#" class="btn btn-outline-success btn-sm w-100">View Live Scores</a>
+                            <a href="{% url 'tournament-results' tournament.id %}" class="btn btn-outline-success btn-sm w-100 fw-bold">📊 View Results</a>
                         {% endif %}
                         
                     </div>
@@ -105,7 +105,7 @@
                     <p class="card-text text-muted mb-3">📅 {{ tournament.start_date }} to {{ tournament.end_date }}</p>
                     <div class="mt-auto">
                         <span class="badge bg-secondary mb-3">Completed</span><br>
-                        <a href="#" class="btn btn-outline-secondary btn-sm w-100">View Results</a>
+                       <a href="{% url 'tournament-results' tournament.id %}" class="btn btn-outline-secondary btn-sm w-100 fw-bold">🏆 View Final Results</a>
                     </div>
                 </div>
             </div>

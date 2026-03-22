@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Results - {{ tournament.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light p-4">
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold m-0">🏆 Tournament Results</h2>
+            <p class="text-muted m-0">{{ tournament.name }}</p>
+        </div>
+        <a href="{% url 'tournament-dashboard' %}" class="btn btn-outline-dark">← Back to Dashboard</a>
+    </div>
+
+    {% regroup completed_matches by full_category_name as category_list %}
+
+    <div class="row">
+        {% for category in category_list %}
+        <div class="col-12 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-dark text-white py-3">
+                    <h5 class="m-0 fw-bold">{{ category.grouper }}</h5>
+                </div>
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-hover table-striped m-0 align-middle text-center">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="small">ROUND</th>
+                                <th class="small text-danger">RED CORNER</th>
+                                <th class="small">VS</th>
+                                <th class="small text-primary">BLUE CORNER</th>
+                                <th class="small text-success">🏆 WINNER</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for match in category.list %}
+                            <tr>
+                                <td class="fw-bold text-muted">Round {{ match.round_number }}</td>
+                                <td class="fw-bold text-danger">{{ match.participant_red.name }}</td>
+                                <td class="text-muted small">vs</td>
+                                
+                                {% if match.participant_blue %}
+                                    <td class="fw-bold text-primary">{{ match.participant_blue.name }}</td>
+                                {% else %}
+                                    <td class="fw-bold text-muted fst-italic">BYE</td>
+                                {% endif %}
+                                
+                                <td class="fw-bold text-success fs-5">
+                                    {{ match.winner.name }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info text-center py-5 shadow-sm">
+                <h4 class="fw-bold">No Results Yet!</h4>
+                <p class="mb-0">Matches have not been completed for this tournament.</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+</body>
+</html>
