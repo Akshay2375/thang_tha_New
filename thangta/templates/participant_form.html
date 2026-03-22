@@ -1,0 +1,100 @@
+{% load widget_tweaks %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% if is_update %}Edit{% else %}Add{% endif %} Participant - Thang-Ta</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light p-4">
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm mt-4">
+                
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-3">
+                    <h4 class="m-0 fw-bold">
+                        {% if is_update %}
+                            Edit Participant: {{ form.instance.name }}
+                        {% else %}
+                            Register New Participant
+                        {% endif %}
+                    </h4>
+                    <a href="{% url 'participant-list' %}" class="btn btn-sm btn-outline-light">Cancel</a>
+                </div>
+                
+                <div class="card-body p-4">
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-primary">Assign to Tournament</label>
+                            {{ form.tournament|add_class:"form-select border-primary" }}
+                        </div>
+
+                        <hr class="mb-4">
+                        <h5 class="mb-3 text-muted">Personal Details</h5>
+                        
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">Full Name</label>
+                                {{ form.name|add_class:"form-control"|attr:"placeholder:Enter athlete's name" }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Actual Age</label>
+                                {{ form.actual_age|add_class:"form-control"|attr:"placeholder:e.g. 15" }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Gender</label>
+                                {{ form.gender|add_class:"form-select" }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Contact Number</label>
+                                {{ form.contact|add_class:"form-control" }}
+                            </div>
+                        </div>
+
+                        <h5 class="mb-3 text-muted">Location & Event Categories</h5>
+                        
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">District</label>
+                                {{ form.district|add_class:"form-control"|attr:"placeholder:e.g. Nagpur" }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">District Code</label>
+                                {{ form.district_code|add_class:"form-control"|attr:"placeholder:e.g. MH-31" }}
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Event Type</label>
+                                {{ form.event_type|add_class:"form-select" }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Age Category</label>
+                                {{ form.age_category|add_class:"form-select" }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Weight Category</label>
+                                {{ form.weight_category|add_class:"form-select" }}
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                            <button type="submit" class="btn btn-success px-5 fw-bold">
+                                {% if is_update %}Update Participant{% else %}Save Participant{% endif %}
+                            </button>
+                        </div>
+                        
+                    </form>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

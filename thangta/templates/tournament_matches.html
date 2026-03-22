@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Match Fixtures - {{ tournament.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light p-4">
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold m-0">Tournament Fixtures</h2>
+            <p class="text-muted m-0">{{ tournament.name }}</p>
+        </div>
+        <div>
+            <a href="{% url 'manage-fixtures' tournament.id %}" class="btn btn-primary me-2">+ Generate More</a>
+            <a href="{% url 'tournament-dashboard' %}" class="btn btn-outline-dark">← Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0 table-responsive">
+            <table class="table table-hover table-striped m-0 align-middle text-center">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="small px-3">RING</th>
+                        <th class="small">CATEGORY</th>
+                        <th class="small">ROUND</th>
+                        <th class="small text-danger">RED CORNER</th>
+                        <th class="small">VS</th>
+                        <th class="small text-primary">BLUE CORNER</th>
+                        <th class="small">WINNER</th>
+                        <th class="small">STATUS</th>
+                        <th class="small px-3">ACTION</th>
+                      
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for match in matches %}
+                    <tr>
+                        <td class="px-3 fw-bold">Ring {{ match.ring_number }}</td>
+                        <td class="small text-muted">
+                            {{ match.get_event_type_display }} | {{ match.get_gender_display }} <br>
+                            {{ match.get_age_category_display }} | {{ match.get_weight_category_display }}
+                        </td>
+                        <td class="fw-bold">Round {{ match.round_number }}<br><span class="text-muted small">Match {{ match.match_sequence }}</span></td>
+                        
+                        <td class="fw-bold text-danger">{{ match.participant_red.name }}</td>
+                        
+                        <td class="text-muted small">vs</td>
+                        
+                        {% if match.participant_blue %}
+                            <td class="fw-bold text-primary">{{ match.participant_blue.name }}</td>
+                        {% else %}
+                            <td class="fw-bold text-muted fst-italic">BYE (No Opponent)</td>
+                        {% endif %}
+                        
+                        <td class="fw-bold text-success">
+                            {{ match.winner.name|default:"-" }}
+                        </td>
+                        
+                        <td>
+                            {% if match.is_completed %}
+                                <span class="badge bg-secondary">Completed</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                            {% endif %}
+                        </td>
+                        
+                          <td class="px-3">
+                     {% if not match.is_completed %}
+                                <a href="{% url 'match-update' match.id %}" class="btn btn-sm btn-success w-100 fw-bold">Update Score</a>
+                            {% else %}
+                                <button class="btn btn-sm btn-outline-secondary w-100" disabled>Finished</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted p-5">
+                            <p class="h5 mt-3">No matches generated yet.</p>
+                            <p class="small m-0 mb-3">Go to the Fixture Generator to create your first bracket.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

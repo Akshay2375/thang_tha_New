@@ -1,0 +1,9 @@
+<h1>Are you sure?</h1>
+<p>Are you sure you want to delete the tournament: <strong>{{ object.name }}</strong>?</p>
+<p style="color: red;">Warning: This will also delete all participants registered for this tournament!</p>
+
+<form method="POST">
+    {% csrf_token %}
+    <button type="submit" style="padding: 10px; background: red; color: white;">Yes, Delete Everything</button>
+    <a href="{% url 'tournament-list' %}">Cancel</a>
+</form>

@@ -1,0 +1,87 @@
+{% load widget_tweaks %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Fixtures - {{ tournament.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light p-4">
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold m-0">Generate Fixtures</h2>
+            <p class="text-muted m-0">{{ tournament.name }}</p>
+        </div>
+        <a href="{% url 'tournament-dashboard' %}" class="btn btn-outline-dark">← Back to Dashboard</a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card shadow-sm border-primary">
+                <div class="card-header bg-primary text-white fw-bold">
+                    ⚙️ Setup Bracket Category
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-muted small">{{ form.event_type.label }}</label>
+                            {{ form.event_type|add_class:"form-select" }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-muted small">{{ form.gender.label }}</label>
+                            {{ form.gender|add_class:"form-select" }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-muted small">{{ form.age_category.label }}</label>
+                            {{ form.age_category|add_class:"form-select" }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-muted small">{{ form.weight_category.label }}</label>
+                            {{ form.weight_category|add_class:"form-select" }}
+                        </div>
+                        <hr>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-dark">{{ form.ring_number.label }}</label>
+                            {{ form.ring_number|add_class:"form-control border-dark" }}
+                            <small class="text-muted">{{ form.ring_number.help_text }}</small>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success w-100 fw-bold py-2">⚡ Generate Round 1 Fixtures</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-7">
+            <div class="card shadow-sm border-0 bg-white">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold">How this works:</h5>
+                    <ul class="text-muted mt-3" style="line-height: 1.8;">
+                        <li>Select the exact category criteria on the left.</li>
+                        <li>The system will find all eligible athletes registered for this specific tournament.</li>
+                        <li>It will <strong>randomly shuffle</strong> them to ensure fair matchups.</li>
+                        <li>If there is an odd number of athletes, one will automatically receive a <strong>BYE</strong> and advance to Round 2.</li>
+                        <li>Matches will be generated and assigned to the Ring Number you specify.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

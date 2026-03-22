@@ -1,0 +1,7 @@
+<h1>Create New Tournament</h1>
+<form method="POST">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" style="padding: 10px; background: green; color: white;">Save Tournament</button>
+    <a href="{% url 'tournament-list' %}">Cancel</a>
+</form>
