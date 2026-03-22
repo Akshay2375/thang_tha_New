@@ -1,32 +1,38 @@
-# accounts/admin.py
+# thangta/admin.py
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser
+from .models import CustomUser, Tournament, Participant, Match
 
+# 1. Custom User Admin
+@admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-    model = CustomUser
-    # Add 'role' to the fields displayed in the Django admin list view
-    list_display = ['username', 'email', 'role', 'is_staff']
+    # What columns show up in the list
+    list_display = ('username', 'first_name', 'last_name', 'role', 'district', 'is_staff')
+    list_filter = ('role', 'is_staff', 'is_superuser', 'is_active')
+    search_fields = ('username', 'first_name', 'last_name', 'district')
     
-    # Add 'role' to the fieldsets so you can edit it in the admin panel
+    # Adding our custom fields to the edit screen
     fieldsets = UserAdmin.fieldsets + (
-        ('Role Information', {'fields': ('role',)}),
-    )
-    add_fieldsets = UserAdmin.add_fieldsets + (
-        ('Role Information', {'fields': ('role',)}),
+        ('Thang-Ta Official Info', {'fields': ('role', 'district', 'district_code')}),
     )
 
-admin.site.register(CustomUser, CustomUserAdmin)
+# 2. Tournament Admin
+@admin.register(Tournament)
+class TournamentAdmin(admin.ModelAdmin):
+    list_display = ('name', 'start_date', 'end_date', 'location', 'battle_rings')
+    list_filter = ('start_date', 'end_date')
+    search_fields = ('name', 'location')
 
-# admin.py
- 
-from .models import Participant
-
+# 3. Participant Admin
 @admin.register(Participant)
 class ParticipantAdmin(admin.ModelAdmin):
-   
-    list_display = ('district', 'district_code', 'age_category', 'weight_category')
+    list_display = ('name', 'tournament', 'gender', 'age_category', 'weight_category', 'event_type', 'district')
+    list_filter = ('tournament', 'gender', 'age_category', 'weight_category', 'event_type')
+    search_fields = ('name', 'district', 'contact')
     
-    # This adds a handy filter sidebar on the right!
-    list_filter = ('age_category', 'weight_category', 'district') 
-    search_fields = ('district', 'district_code')
+# 4. Match Admin
+@admin.register(Match)
+class MatchAdmin(admin.ModelAdmin):
+    list_display = ('tournament', 'ring_number', 'round_number', 'participant_red', 'participant_blue', 'winner', 'is_completed')
+    list_filter = ('tournament', 'is_completed', 'ring_number', 'round_number', 'event_type', 'gender', 'age_category', 'weight_category')
+    search_fields = ('participant_red__name', 'participant_blue__name')

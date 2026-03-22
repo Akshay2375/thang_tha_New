@@ -8,16 +8,54 @@
 <body class="bg-light p-4">
 
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h2 class="fw-bold m-0">Tournament Fixtures</h2>
             <p class="text-muted m-0">{{ tournament.name }}</p>
         </div>
-        <div>
-            <a href="{% url 'manage-fixtures' tournament.id %}" class="btn btn-primary me-2">+ Generate More</a>
-            <a href="{% url 'tournament-dashboard' %}" class="btn btn-outline-dark">← Back to Dashboard</a>
+        
+        <div class="d-flex align-items-center gap-2">
+            
+            {% if can_generate_next_round %}
+                <form action="{% url 'tournament-round-advance' tournament.id current_round %}" method="POST" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-warning fw-bold shadow-sm px-4" onclick="return confirm('Generate matches for Round {{ current_round|add:1 }}?');">
+                        ⚡ Generate Round {{ current_round|add:1 }}
+                    </button>
+                </form>
+            {% else %}
+                <button class="btn btn-secondary px-4 disabled" title="Finish all matches in this round to unlock">
+                    🔒 Finish Round {{ current_round }} to Advance
+                </button>
+            {% endif %}
+
+            <a href="{% url 'manage-fixtures' tournament.id %}" class="btn btn-primary">+ New Category</a>
+            <a href="{% url 'tournament-dashboard' %}" class="btn btn-outline-dark">Dashboard</a>
         </div>
     </div>
+
+    <ul class="nav nav-tabs mb-4">
+        {% for round_num in rounds %}
+            <li class="nav-item">
+                <a class="nav-link {% if round_num == current_round %}active fw-bold text-primary{% else %}text-muted{% endif %}" 
+                   href="?round={{ round_num }}">
+                   Round {{ round_num }}
+                </a>
+            </li>
+        {% empty %}
+            <li class="nav-item"><a class="nav-link active">No Rounds Generated</a></li>
+        {% endfor %}
+    </ul>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
 
     <div class="card shadow-sm border-0">
         <div class="card-body p-0 table-responsive">
@@ -26,14 +64,12 @@
                     <tr>
                         <th class="small px-3">RING</th>
                         <th class="small">CATEGORY</th>
-                        <th class="small">ROUND</th>
                         <th class="small text-danger">RED CORNER</th>
                         <th class="small">VS</th>
                         <th class="small text-primary">BLUE CORNER</th>
                         <th class="small">WINNER</th>
                         <th class="small">STATUS</th>
                         <th class="small px-3">ACTION</th>
-                      
                     </tr>
                 </thead>
                 <tbody>
@@ -42,12 +78,11 @@
                         <td class="px-3 fw-bold">Ring {{ match.ring_number }}</td>
                         <td class="small text-muted">
                             {{ match.get_event_type_display }} | {{ match.get_gender_display }} <br>
-                            {{ match.get_age_category_display }} | {{ match.get_weight_category_display }}
+                            {{ match.get_age_category_display }} | {{ match.get_weight_category_display }}<br>
+                            <span class="text-dark fw-bold">Match {{ match.match_sequence }}</span>
                         </td>
-                        <td class="fw-bold">Round {{ match.round_number }}<br><span class="text-muted small">Match {{ match.match_sequence }}</span></td>
                         
                         <td class="fw-bold text-danger">{{ match.participant_red.name }}</td>
-                        
                         <td class="text-muted small">vs</td>
                         
                         {% if match.participant_blue %}
@@ -56,9 +91,7 @@
                             <td class="fw-bold text-muted fst-italic">BYE (No Opponent)</td>
                         {% endif %}
                         
-                        <td class="fw-bold text-success">
-                            {{ match.winner.name|default:"-" }}
-                        </td>
+                        <td class="fw-bold text-success">{{ match.winner.name|default:"-" }}</td>
                         
                         <td>
                             {% if match.is_completed %}
@@ -68,8 +101,8 @@
                             {% endif %}
                         </td>
                         
-                          <td class="px-3">
-                     {% if not match.is_completed %}
+                        <td class="px-3">
+                            {% if not match.is_completed %}
                                 <a href="{% url 'match-update' match.id %}" class="btn btn-sm btn-success w-100 fw-bold">Update Score</a>
                             {% else %}
                                 <button class="btn btn-sm btn-outline-secondary w-100" disabled>Finished</button>
@@ -78,9 +111,8 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="9" class="text-center text-muted p-5">
-                            <p class="h5 mt-3">No matches generated yet.</p>
-                            <p class="small m-0 mb-3">Go to the Fixture Generator to create your first bracket.</p>
+                        <td colspan="8" class="text-center text-muted p-5">
+                            <p class="h5 mt-3">No matches found for Round {{ current_round }}.</p>
                         </td>
                     </tr>
                     {% endfor %}
@@ -90,5 +122,6 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

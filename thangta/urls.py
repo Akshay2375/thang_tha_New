@@ -1,6 +1,6 @@
 # urls.py
 from django.urls import path
-from .views import TournamentListView, TournamentCreateView, TournamentDeleteView,ParticipantListView,TournamentDashboardView,ParticipantCreateView,OfficialCreateView,end_tournament,ParticipantDeleteView,ParticipantUpdateView,manage_fixtures,tournament_matches,update_match_winner
+from .views import TournamentListView, TournamentCreateView, TournamentDeleteView,ParticipantListView,TournamentDashboardView,ParticipantCreateView,OfficialCreateView,end_tournament,ParticipantDeleteView,ParticipantUpdateView,manage_fixtures,tournament_matches,update_match_winner,auto_generate_next_round,generate_next_round_all
 from django.contrib.auth import views as auth_views
 urlpatterns = [
     
@@ -24,5 +24,8 @@ urlpatterns = [
     path('tournaments/<int:tournament_id>/matches/', tournament_matches, name='tournament-matches'),
     
     path('matches/<int:match_id>/update/', update_match_winner, name='match-update'),
+    path('',TournamentDashboardView.as_view(), name='tournament-dashboard'),
+    path('matches/<int:match_id>/auto-advance/', auto_generate_next_round, name='match-auto-advance'),
     
+    path('tournaments/<int:tournament_id>/round/<int:current_round>/advance/', generate_next_round_all, name='tournament-round-advance'),
     ]
