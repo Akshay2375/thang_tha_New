@@ -127,7 +127,9 @@ class Match(models.Model):
     age_category = models.CharField(max_length=3)
     weight_category = models.CharField(max_length=4)
     gender = models.CharField(max_length=10)
-    
+    is_completed = models.BooleanField(default=False)
+    # NEW: Tracks if the judge has officially started the match
+    is_active = models.BooleanField(default=False)
     # 2. Progression Tracking
     round_number = models.IntegerField(default=1)
     match_sequence = models.IntegerField(help_text="Order of the match in this round")
@@ -142,7 +144,7 @@ class Match(models.Model):
     # 4. Winner Selection
     winner = models.ForeignKey(Participant, related_name='matches_won', on_delete=models.SET_NULL, null=True, blank=True)
     is_completed = models.BooleanField(default=False)
-    
+    current_sub_round = models.IntegerField(default=1)
     @property
     def full_category_name(self):
         """Creates a clean string for the results grouping using raw fields"""
@@ -155,3 +157,45 @@ class Match(models.Model):
     def __str__(self):
         blue_name = self.participant_blue.name if self.participant_blue else "BYE"
         return f"Round {self.round_number} | Ring {self.ring_number} | {self.participant_red.name} (RED) vs {blue_name} (BLUE)"
+    
+    
+    
+class Score(models.Model):
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='scores')
+    participant = models.ForeignKey(Participant, on_delete=models.CASCADE)
+    scorer = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='submitted_scores')
+    points = models.IntegerField(default=1)
+    
+    # NEW FIELDS FOR JUDGE CONTROL
+    sub_round = models.IntegerField(default=1) 
+    is_foul = models.BooleanField(default=False)
+    foul_reason = models.CharField(max_length=255, blank=True, null=True)
+    
+    # If the Judge flags it, this score gets invalidated and removed from the total!
+    is_flagged = models.BooleanField(default=False) 
+    
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp'] # Newest scores appear first
+
+    def __str__(self):
+        foul_str = f" (FOUL: {self.foul_reason})" if self.is_foul else ""
+        return f"SR{self.sub_round} - {self.points} pts for {self.participant.name} by {self.scorer.username}{foul_str}"
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='scores')
+    # The fighter who scored the point
+    participant = models.ForeignKey(Participant, on_delete=models.CASCADE)
+    # The official (Scorer) who awarded the point
+    scorer = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='submitted_scores')
+    
+    # How many points were awarded (e.g., 1, 2, or maybe negative for penalties)
+    points = models.IntegerField(default=1)
+    
+    # Exact time the score was submitted (crucial for live updates)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp'] # Newest scores appear first
+
+    def __str__(self):
+        return f"{self.points} pts for {self.participant.name} (by {self.scorer.username})"

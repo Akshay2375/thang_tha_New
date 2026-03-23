@@ -36,3 +36,12 @@ class MatchAdmin(admin.ModelAdmin):
     list_display = ('tournament', 'ring_number', 'round_number', 'participant_red', 'participant_blue', 'winner', 'is_completed')
     list_filter = ('tournament', 'is_completed', 'ring_number', 'round_number', 'event_type', 'gender', 'age_category', 'weight_category')
     search_fields = ('participant_red__name', 'participant_blue__name')
+    
+    
+    
+    
+from .models import Score # Make sure to add Score to your imports at the top!
+
+@admin.register(Score)
+class ScoreAdmin(admin.ModelAdmin):
+    list_display = ('match', 'participant', 'points', 'sub_round', 'is_foul')

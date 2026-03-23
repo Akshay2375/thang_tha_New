@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>Judge Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light p-3">
+
+<div class="container max-w-md mx-auto">
+    <div class="text-center mb-4 mt-3">
+        <h2 class="fw-bold">Judge Panel</h2>
+        <p class="text-muted">Welcome, {{ request.user.first_name|default:request.user.username }}</p>
+    </div>
+
+    {% for tournament in live_tournaments %}
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-dark text-white text-center py-3">
+                <h5 class="m-0 fw-bold">{{ tournament.name }}</h5>
+            </div>
+            <div class="card-body text-center p-4">
+                <p class="text-muted mb-4">Select your assigned ring to view the fight schedule.</p>
+                
+                <div class="d-flex justify-content-center gap-3 flex-wrap">
+                    {% with ''|center:tournament.battle_rings as range %}
+                    {% for _ in range %}
+                        <a href="{% url 'judge-ring-matches' tournament.id forloop.counter %}" class="btn btn-primary btn-lg px-4 py-3 fw-bold shadow-sm">
+                            Ring {{ forloop.counter }}
+                        </a>
+                    {% endfor %}
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="alert alert-info text-center">
+            No live tournaments found. Please wait for the admin to start a tournament.
+        </div>
+    {% endfor %}
+    
+    <div class="text-center mt-5">
+        <form action="{% url 'logout' %}" method="POST">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger">Log Out</button>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>

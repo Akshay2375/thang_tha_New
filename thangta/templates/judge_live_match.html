@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIVE: Ring {{ match.ring_number }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .score-box { font-size: 5rem; font-weight: 900; line-height: 1; }
+        .red-panel { background-color: #ffeef0; border: 3px solid #dc3545; }
+        .blue-panel { background-color: #e6f2ff; border: 3px solid #0d6efd; }
+        /* Style for the scrolling event feed */
+        .feed-container { max-height: 300px; overflow-y: auto; background-color: #2b3035; border: 1px solid #495057; border-radius: 8px; }
+        .flagged-row { opacity: 0.5; text-decoration: line-through; }
+    </style>
+</head>
+<body class="bg-dark text-white p-3 d-flex flex-column" style="min-height: 100vh;">
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{% url 'judge-ring-matches' match.tournament.id match.ring_number %}" class="btn btn-outline-light btn-sm">← Back to Queue</a>
+    <div class="text-center">
+        <h4 class="m-0 text-warning fw-bold">🔴 LIVE - RING {{ match.ring_number }}</h4>
+        <span class="small text-light opacity-75">{{ match.full_category_name }}</span>
+    </div>
+    
+    <div class="bg-secondary bg-opacity-50 px-3 py-1 rounded border border-secondary text-center">
+        <span class="small text-uppercase fw-bold text-light opacity-75">Sub-Round</span>
+        <h4 class="m-0 fw-bold">{{ match.current_sub_round }}</h4>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 d-flex flex-column">
+        <div class="red-panel rounded flex-grow-1 d-flex flex-column justify-content-center align-items-center text-danger p-3 shadow">
+            <h3 class="fw-bold text-center text-uppercase mb-1">{{ match.participant_red.name }}</h3>
+            <p class="small text-dark fw-bold mb-2">{{ match.participant_red.district }}</p>
+            <div class="score-box" id="red-score">{{ red_score }}</div>
+        </div>
+    </div>
+    <div class="col-6 d-flex flex-column">
+        <div class="blue-panel rounded flex-grow-1 d-flex flex-column justify-content-center align-items-center text-primary p-3 shadow">
+            {% if match.participant_blue %}
+                <h3 class="fw-bold text-center text-uppercase mb-1">{{ match.participant_blue.name }}</h3>
+                <p class="small text-dark fw-bold mb-2">{{ match.participant_blue.district }}</p>
+                <div class="score-box" id="blue-score">{{ blue_score }}</div>
+            {% else %}
+                <h3 class="fw-bold text-center fst-italic mb-1">BYE</h3>
+                <div class="score-box text-muted">-</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<h5 class="fw-bold text-light mb-2 px-1">📊 Live Scorer Feed</h5>
+<div class="feed-container shadow-lg mb-4">
+    <table class="table table-dark table-hover m-0 align-middle">
+        <thead class="table-active" style="position: sticky; top: 0; z-index: 1;">
+            <tr>
+                <th class="small py-2 text-muted">SR</th>
+                <th class="small py-2 text-muted">ACTION</th>
+                <th class="small py-2 text-muted">FIGHTER</th>
+                <th class="small py-2 text-muted">SCORER</th>
+                <th class="small py-2 text-muted text-end">JUDGE OVERRIDE</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in score_feed %}
+                <tr class="{% if event.is_flagged %}flagged-row{% endif %}">
+                    <td class="fw-bold text-muted">{{ event.sub_round }}</td>
+                    
+                    <td>
+                        {% if event.is_foul %}
+                            <span class="badge bg-warning text-dark fw-bold">⚠️ FOUL</span>
+                            <span class="small ms-1">{{ event.foul_reason }}</span>
+                        {% else %}
+                            <span class="badge bg-success fw-bold">+{{ event.points }} PT</span>
+                        {% endif %}
+                    </td>
+                    
+                    <td class="fw-bold {% if event.participant == match.participant_red %}text-danger{% else %}text-primary{% endif %}">
+                        {{ event.participant.name }}
+                    </td>
+                    
+                    <td class="small text-light">{{ event.scorer.first_name|default:event.scorer.username }}</td>
+                    
+                    <td class="text-end">
+                        {% if not event.is_flagged %}
+                            <button class="btn btn-sm btn-outline-danger fw-bold">🚩 Flag</button>
+                        {% else %}
+                            <span class="badge bg-danger">Flagged by Judge</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-light opacity-50 py-4 fst-italic">Waiting for scorers to submit points...</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-auto text-center pb-2">
+    <button class="btn btn-danger btn-lg px-5 fw-bold shadow-lg">🛑 End Match & Declare Winner</button>
+</div>
+
+</body>
+</html>

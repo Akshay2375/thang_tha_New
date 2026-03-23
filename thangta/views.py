@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.db.models import Q
 from django.contrib import messages
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView, TemplateView
+from django.db.models import Sum
 from django.db.models import Count
 # --- 2. LOCAL IMPORTS ---
 from .models import Tournament, Participant, CustomUser, Match
@@ -382,3 +383,113 @@ def tournament_results(request, tournament_id):
         'completed_matches': completed_matches
     })
     
+    
+    
+    
+    
+# thangta/views.py
+from .permissions import judge_required
+
+# --- JUDGE VIEWS ---
+
+@judge_required
+def judge_dashboard(request):
+    """Shows live tournaments and lets the judge pick a ring."""
+    today = timezone.now().date()
+    # Fetch only active tournaments
+    live_tournaments = Tournament.objects.filter(
+        start_date__lte=today
+    ).filter(Q(end_date__isnull=True) | Q(end_date__gt=today)).order_by('start_date')
+    
+    return render(request, 'judge_dashboard.html', {'live_tournaments': live_tournaments})
+
+@judge_required
+def judge_ring_matches(request, tournament_id, ring_number):
+    """Shows all matches for a specific ring in order."""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Get all matches for THIS specific ring, ordered by round and sequence
+    matches = Match.objects.filter(
+        tournament=tournament, 
+        ring_number=ring_number
+    ).order_by('round_number', 'match_sequence')
+    
+    # Check if this ring currently has a match actively running
+    active_match = matches.filter(is_active=True, is_completed=False).first()
+    
+    return render(request, 'judge_ring_matches.html', {
+        'tournament': tournament,
+        'ring_number': ring_number,
+        'matches': matches,
+        'active_match': active_match
+    })
+    
+    
+# thangta/views.py
+
+@judge_required
+def start_match(request, match_id):
+    """Flips the match to active and redirects to the Live Panel."""
+    match = get_object_or_404(Match, id=match_id)
+    
+    if request.method == 'POST':
+        # Only start it if it isn't already finished
+        if not match.is_completed:
+            match.is_active = True
+            match.save()
+            return redirect('judge-live-match', match_id=match.id)
+            
+    return redirect('judge-ring-matches', tournament_id=match.tournament.id, ring_number=match.ring_number)
+
+# thangta/views.py
+
+@judge_required
+def judge_live_match(request, match_id):
+    match = get_object_or_404(Match, id=match_id)
+    
+    # 1. Fetch ALL scores (the Event Feed)
+    score_feed = match.scores.all()
+    
+    # 2. Calculate totals using ONLY valid scores (Not Flagged, Not Fouls)
+    # Note: If fouls give negative points in your rules, we can adjust this logic later!
+    valid_scores = score_feed.filter(is_flagged=False, is_foul=False)
+    
+    red_score = valid_scores.filter(participant=match.participant_red).aggregate(Sum('points'))['points__sum'] or 0
+    blue_score = 0
+    if match.participant_blue:
+        blue_score = valid_scores.filter(participant=match.participant_blue).aggregate(Sum('points'))['points__sum'] or 0
+
+    return render(request, 'judge_live_match.html', {
+        'match': match,
+        'red_score': red_score,
+        'blue_score': blue_score,
+        'score_feed': score_feed, # Pass the feed to the template!
+    })
+    
+# thangta/views.py
+from django.contrib.auth.decorators import login_required
+
+@login_required(login_url='login')
+def dashboard_dispatcher(request):
+    """The Traffic Cop: Redirects users based on their role after login."""
+    
+    # If they are an Admin or Superuser, send them to the main admin dashboard
+    if request.user.is_superuser or request.user.role == 'ADMIN':
+        return redirect('tournament-dashboard')
+        
+    # If they are a Judge, send them to the ring selection screen
+    elif request.user.role == 'JUDGE':
+        return redirect('judge-dashboard')
+        
+    # We will build the scorer dashboard later, but let's prepare the route!
+    elif request.user.role == 'SCORER':
+        # For now, just send them to the judge dashboard or a placeholder
+        return redirect('judge-dashboard') 
+        
+    # Fallback just in case
+    return redirect('login')
+
+
+
+from django.http import JsonResponse
+from django.template.loader import render_to_string
