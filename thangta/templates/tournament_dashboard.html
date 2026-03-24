@@ -12,15 +12,14 @@
         <h1 class="fw-bold">Thang-Ta Tournaments</h1>
         
         <div class="d-flex align-items-center">
-            {% if request.user.is_authenticated and request.user.role == 'ADMIN' or request.user.is_superuser %}
-                 <a href="{% url 'official-add' %}" class="btn btn-outline-info me-2 text-dark fw-bold">+ Add Official</a>
-                <a href="{% url 'participant-list' %}" class="btn btn-outline-dark me-2">👥 All Participants</a>
-                <a href="{% url 'tournament-add' %}" class="btn btn-primary me-3">+ Create Tournament</a>
-            {% endif %}
-
             {% if request.user.is_authenticated %}
-                <span class="text-muted me-3 small">Logged in as <strong>{{ request.user.username }}</strong></span>
-                
+                {% if request.user.role == 'ADMIN' or request.user.is_superuser %}
+                    <a href="{% url 'official-add' %}" class="btn btn-outline-info me-2 text-dark fw-bold">+ Add Official</a>
+                    <a href="{% url 'participant-list' %}" class="btn btn-outline-dark me-2">👥 All Participants</a>
+                    <a href="{% url 'tournament-add' %}" class="btn btn-primary me-3">+ Create Tournament</a>
+                {% endif %}
+
+                <span class="text-muted me-3 small">Logged in as <strong>{{ request.user.username }}</strong> ({{ request.user.role }})</span>
                 <form action="{% url 'logout' %}" method="post" class="m-0">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-sm btn-outline-danger">Log Out</button>
@@ -31,7 +30,7 @@
         </div>
     </div>
 
-   <h3 class="text-success mb-3">🟢 Live Tournaments</h3>
+    <h3 class="text-success mb-3">🟢 Live Tournaments</h3>
     <div class="row mb-5">
         {% for tournament in live_tournaments %}
         <div class="col-md-4 mb-3">
@@ -39,28 +38,32 @@
                 <div class="card-body d-flex flex-column">
                     <h5 class="card-title fw-bold">{{ tournament.name }}</h5>
                     <p class="card-text text-muted mb-1">📍 {{ tournament.location|default:"TBA" }}</p>
-                    
                     <p class="card-text text-muted mb-3">📅 {{ tournament.start_date }} to {{ tournament.end_date|default:"TBD" }}</p>
                     
                     <div class="mt-auto">
                         <span class="badge bg-success mb-3">Ongoing Now</span><br>
                         
-                        {% if request.user.is_authenticated and request.user.role == 'ADMIN' or request.user.is_superuser %}
+                        {% if request.user.is_authenticated %}
                             
-                            <a href="{% url 'participant-list' %}?tournament={{ tournament.id }}" class="btn btn-success btn-sm w-100 mb-2">Manage Live Event</a>
-
-                            <a href="{% url 'manage-fixtures' tournament.id %}" class="btn btn-warning btn-sm w-100 mb-2">⚙️ Generate Fixtures</a>
-                            <a href="{% url 'tournament-matches' tournament.id %}" class="btn btn-info btn-sm w-100 mb-2 text-white fw-bold">🥊 View Matches</a>
+                            {% if request.user.role == 'ADMIN' or request.user.is_superuser %}
+                                <a href="{% url 'participant-list' %}?tournament={{ tournament.id }}" class="btn btn-success btn-sm w-100 mb-2">👥 Manage Live Event</a>
+                                <a href="{% url 'manage-fixtures' tournament.id %}" class="btn btn-warning btn-sm w-100 mb-2 text-dark fw-bold">⚙️ Generate Fixtures</a>
+                                <a href="{% url 'tournament-matches' tournament.id %}" class="btn btn-info btn-sm w-100 mb-2 text-white fw-bold">🥊 View Matches</a>
+                                
+                                <form action="{% url 'tournament-end' tournament.id %}" method="POST" class="m-0 mb-2">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('Are you sure you want to end this tournament today?');">🛑 End Tournament</button>
+                                </form>
+                                
+                            {% elif request.user.role == 'JUDGE' %}
+                                <a href="{% url 'judge-dashboard' %}" class="btn btn-warning btn-sm w-100 mb-2 fw-bold text-dark">⚖️ Select Ring & Judge</a>
+                                <a href="{% url 'manage-fixtures' tournament.id %}" class="btn btn-info btn-sm w-100 mb-2 text-white fw-bold">⚙️ Generate Fixtures</a>
+                                <a href="{% url 'tournament-matches' tournament.id %}" class="btn btn-primary btn-sm w-100 mb-2 fw-bold">🥊 View Matches</a>
+                            {% endif %}
                             
-                            <form action="{% url 'tournament-end' tournament.id %}" method="POST" class="m-0">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('Are you sure you want to end this tournament today?');">🛑 End Tournament Today</button>
-                            </form>
-                            
-                        {% else %}
-                            <a href="{% url 'tournament-results' tournament.id %}" class="btn btn-outline-success btn-sm w-100 fw-bold">📊 View Results</a>
                         {% endif %}
                         
+                        <a href="{% url 'tournament-results' tournament.id %}" class="btn btn-outline-success btn-sm w-100 fw-bold">📊 View Results</a>
                     </div>
                 </div>
             </div>
@@ -69,6 +72,7 @@
         <div class="col-12"><p class="text-muted fst-italic">No live tournaments at the moment.</p></div>
         {% endfor %}
     </div>
+
     <h3 class="text-primary mb-3">🗓️ Upcoming Tournaments</h3>
     <div class="row mb-5">
         {% for tournament in upcoming_tournaments %}
@@ -79,11 +83,10 @@
                     <p class="card-text text-muted mb-1">📍 {{ tournament.location|default:"TBA" }}</p>
                     <p class="card-text text-muted mb-3">📅 {{ tournament.start_date }} to {{ tournament.end_date }}</p>
                     <div class="mt-auto">
-                        
                         {% if request.user.is_authenticated and request.user.role == 'ADMIN' or request.user.is_superuser %}
                             <a href="{% url 'participant-list' %}?tournament={{ tournament.id }}" class="btn btn-primary btn-sm w-100">Prepare Event</a>
                         {% else %}
-                            <a href="#" class="btn btn-outline-primary btn-sm w-100">Event Details</a>
+                            <button class="btn btn-outline-primary btn-sm w-100 disabled">Starts Soon</button>
                         {% endif %}
                     </div>
                 </div>
@@ -105,7 +108,7 @@
                     <p class="card-text text-muted mb-3">📅 {{ tournament.start_date }} to {{ tournament.end_date }}</p>
                     <div class="mt-auto">
                         <span class="badge bg-secondary mb-3">Completed</span><br>
-                       <a href="{% url 'tournament-results' tournament.id %}" class="btn btn-outline-secondary btn-sm w-100 fw-bold">🏆 View Final Results</a>
+                        <a href="{% url 'tournament-results' tournament.id %}" class="btn btn-outline-secondary btn-sm w-100 fw-bold">🏆 View Final Results</a>
                     </div>
                 </div>
             </div>

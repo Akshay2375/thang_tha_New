@@ -117,7 +117,9 @@ def generate_next_round(tournament, event_type, age_category, weight_category, g
             weight_category=weight_category, gender=gender,
             round_number=next_round_number, match_sequence=match_sequence, ring_number=ring_number,
             participant_red=winners[i], participant_blue=winners[i+1]
+            
         )
         match_sequence += 1
+        
         
     return True, f"Round {next_round_number} generated successfully."

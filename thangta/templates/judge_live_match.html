@@ -63,39 +63,8 @@
                 <th class="small py-2 text-muted text-end">JUDGE OVERRIDE</th>
             </tr>
         </thead>
-        <tbody>
-            {% for event in score_feed %}
-                <tr class="{% if event.is_flagged %}flagged-row{% endif %}">
-                    <td class="fw-bold text-muted">{{ event.sub_round }}</td>
-                    
-                    <td>
-                        {% if event.is_foul %}
-                            <span class="badge bg-warning text-dark fw-bold">⚠️ FOUL</span>
-                            <span class="small ms-1">{{ event.foul_reason }}</span>
-                        {% else %}
-                            <span class="badge bg-success fw-bold">+{{ event.points }} PT</span>
-                        {% endif %}
-                    </td>
-                    
-                    <td class="fw-bold {% if event.participant == match.participant_red %}text-danger{% else %}text-primary{% endif %}">
-                        {{ event.participant.name }}
-                    </td>
-                    
-                    <td class="small text-light">{{ event.scorer.first_name|default:event.scorer.username }}</td>
-                    
-                    <td class="text-end">
-                        {% if not event.is_flagged %}
-                            <button class="btn btn-sm btn-outline-danger fw-bold">🚩 Flag</button>
-                        {% else %}
-                            <span class="badge bg-danger">Flagged by Judge</span>
-                        {% endif %}
-                    </td>
-                </tr>
-            {% empty %}
-                <tr>
-                    <td colspan="5" class="text-center text-light opacity-50 py-4 fst-italic">Waiting for scorers to submit points...</td>
-                </tr>
-            {% endfor %}
+        <tbody id="score-feed-body">
+            {% include 'partials/score_feed_rows.html' %}
         </tbody>
     </table>
 </div>
@@ -104,5 +73,53 @@
     <button class="btn btn-danger btn-lg px-5 fw-bold shadow-lg">🛑 End Match & Declare Winner</button>
 </div>
 
+
+
+
+
+<script>
+    function fetchLiveData() {
+        // Ping the hidden URL we just made
+        fetch("{% url 'match-live-data' match.id %}")
+            .then(response => response.json())
+            .then(data => {
+                // Instantly update the giant red and blue numbers
+                document.getElementById('red-score').innerText = data.red_score;
+                
+                let blueScoreElement = document.getElementById('blue-score');
+                if (blueScoreElement) {
+                    blueScoreElement.innerText = data.blue_score;
+                }
+                
+                // Instantly replace all the rows in the table with the fresh data
+                document.getElementById('score-feed-body').innerHTML = data.feed_html;
+            })
+            .catch(error => console.error('Error fetching live data:', error));
+    }
+
+    // Add this inside the <script> tag in judge_live_match.html
+
+function toggleFlag(scoreId) {
+    // Ping the hidden flag URL
+    fetch(`/judge/score/${scoreId}/flag/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}', // Security token required by Django
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            // Force an immediate refresh of the scoreboard so it feels instant!
+            fetchLiveData(); 
+        }
+    })
+    .catch(error => console.error('Error flagging score:', error));
+}
+    setInterval(fetchLiveData, 1500);
+</script>
+
 </body>
 </html>
+

@@ -4,8 +4,6 @@ from django.db import models
 # ==========================================
 # 1. USER AUTHENTICATION MODEL
 # ==========================================
-# thangta/models.py
-
 class CustomUser(AbstractUser):
     class Role(models.TextChoices):
         ADMIN = 'ADMIN', 'Admin'
@@ -18,7 +16,7 @@ class CustomUser(AbstractUser):
         default=Role.SCORER
     )
     
-    # NEW: Location fields for officials
+    # Location fields for officials
     district = models.CharField(max_length=100, null=True, blank=True)
     district_code = models.CharField(max_length=20, null=True, blank=True)
 
@@ -30,6 +28,8 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return f"{self.username} - {self.get_role_display()}"
+
+
 # ==========================================
 # 2. TOURNAMENT MODEL
 # ==========================================
@@ -116,86 +116,72 @@ class Participant(models.Model):
     def __str__(self):
         display_name = self.name if self.name else "Unnamed Participant"
         return f"{display_name} | {self.district} - {self.get_age_category_display()}"
-    
-    
-    
-    
+
+
+# ==========================================
+# 4. MATCH MODEL
+# ==========================================
 class Match(models.Model):
-    # 1. Grouping Criteria (To know which bracket this belongs to)
+    # 1. Grouping Criteria
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE)
     event_type = models.CharField(max_length=50)
     age_category = models.CharField(max_length=3)
     weight_category = models.CharField(max_length=4)
     gender = models.CharField(max_length=10)
-    is_completed = models.BooleanField(default=False)
-    # NEW: Tracks if the judge has officially started the match
+    
+    # 2. Match State Control
     is_active = models.BooleanField(default=False)
-    # 2. Progression Tracking
+    is_completed = models.BooleanField(default=False)
+    
+    # 3. Progression Tracking
     round_number = models.IntegerField(default=1)
     match_sequence = models.IntegerField(help_text="Order of the match in this round")
+    current_sub_round = models.IntegerField(default=1)
     
-    # 3. Match Structure
+    # 4. Match Structure
     ring_number = models.IntegerField(default=1)
     
-    # Corners (Blue can be blank if the Red participant gets a BYE)
+    # Corners
     participant_red = models.ForeignKey(Participant, related_name='matches_as_red', on_delete=models.CASCADE)
     participant_blue = models.ForeignKey(Participant, related_name='matches_as_blue', on_delete=models.CASCADE, null=True, blank=True)
     
-    # 4. Winner Selection
+    # Winner Selection
     winner = models.ForeignKey(Participant, related_name='matches_won', on_delete=models.SET_NULL, null=True, blank=True)
-    is_completed = models.BooleanField(default=False)
-    current_sub_round = models.IntegerField(default=1)
+    
     @property
     def full_category_name(self):
         """Creates a clean string for the results grouping using raw fields"""
-        # We use .replace() and .title() to make backend strings like 'PHUNABA_AMA' look like 'Phunaba Ama'
         event = self.event_type.replace('_', ' ').title()
-        gender = self.gender.title()
-        
-        return f"{event} | {gender} | {self.age_category} | {self.weight_category}"
+        gender_title = self.gender.title()
+        return f"{event} | {gender_title} | {self.age_category} | {self.weight_category}"
 
     def __str__(self):
         blue_name = self.participant_blue.name if self.participant_blue else "BYE"
         return f"Round {self.round_number} | Ring {self.ring_number} | {self.participant_red.name} (RED) vs {blue_name} (BLUE)"
-    
-    
-    
+
+
+# ==========================================
+# 5. SCORE MODEL
+# ==========================================
 class Score(models.Model):
     match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='scores')
     participant = models.ForeignKey(Participant, on_delete=models.CASCADE)
     scorer = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='submitted_scores')
+    
     points = models.IntegerField(default=1)
     
-    # NEW FIELDS FOR JUDGE CONTROL
+    # Fields for Judge Control
     sub_round = models.IntegerField(default=1) 
     is_foul = models.BooleanField(default=False)
     foul_reason = models.CharField(max_length=255, blank=True, null=True)
-    
-    # If the Judge flags it, this score gets invalidated and removed from the total!
     is_flagged = models.BooleanField(default=False) 
     
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['-timestamp'] # Newest scores appear first
+        ordering = ['-timestamp']
 
     def __str__(self):
         foul_str = f" (FOUL: {self.foul_reason})" if self.is_foul else ""
-        return f"SR{self.sub_round} - {self.points} pts for {self.participant.name} by {self.scorer.username}{foul_str}"
-    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='scores')
-    # The fighter who scored the point
-    participant = models.ForeignKey(Participant, on_delete=models.CASCADE)
-    # The official (Scorer) who awarded the point
-    scorer = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='submitted_scores')
-    
-    # How many points were awarded (e.g., 1, 2, or maybe negative for penalties)
-    points = models.IntegerField(default=1)
-    
-    # Exact time the score was submitted (crucial for live updates)
-    timestamp = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-timestamp'] # Newest scores appear first
-
-    def __str__(self):
-        return f"{self.points} pts for {self.participant.name} (by {self.scorer.username})"
+        scorer_name = self.scorer.username if self.scorer else "Unknown Scorer"
+        return f"SR{self.sub_round} - {self.points} pts for {self.participant.name} by {scorer_name}{foul_str}"

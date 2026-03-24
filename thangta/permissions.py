@@ -29,12 +29,20 @@ class AdminRequiredMixin(AccessMixin):
     
 # thangta/permissions.py
 
+# thangta/permissions.py
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect
+
 def judge_required(view_func):
-    """Decorator to ensure only logged-in Judges can access the view."""
+    """Decorator to ensure Judges OR Admins can access the view."""
+    @login_required(login_url='login')
     def _wrapped_view(request, *args, **kwargs):
-        if request.user.is_authenticated and request.user.role == 'JUDGE':
+        
+        # Check if the user is a JUDGE, an ADMIN, or a Django Superuser
+        if request.user.role in ['JUDGE', 'ADMIN'] or request.user.is_superuser:
             return view_func(request, *args, **kwargs)
-        # If they aren't a judge, send them to the login page
-        from django.shortcuts import redirect
-        return redirect('login')
+            
+        # If they are just a Scorer or have no permissions, send them back to the dashboard
+        return redirect('tournament-dashboard') 
+        
     return _wrapped_view

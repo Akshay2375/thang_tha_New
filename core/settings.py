@@ -72,7 +72,7 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # core/settings.py
 
-LOGIN_REDIRECT_URL = 'dashboard-dispatcher'
+# LOGIN_REDIRECT_URL = 'dashboard-dispatcher'
 LOGIN_URL = 'login'
 # LOGOUT_REDIRECT_URL = 'tournament-dashboard'
 # Database

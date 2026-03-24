@@ -20,12 +20,14 @@ urlpatterns = [
     path('participants/<int:pk>/edit/', ParticipantUpdateView.as_view(), name='participant-edit'),
     path('participants/<int:pk>/delete/', ParticipantDeleteView.as_view(), name='participant-delete'),
     
-    path('tournaments/<int:tournament_id>/fixtures/', manage_fixtures, name='manage-fixtures'),
+    # path('tournaments/<int:tournament_id>/fixtures/', manage_fixtures, name='manage-fixtures'),
     path('tournaments/<int:tournament_id>/matches/', tournament_matches, name='tournament-matches'),
     
     path('matches/<int:match_id>/update/', update_match_winner, name='match-update'),
     path('',TournamentDashboardView.as_view(), name='tournament-dashboard'),
     path('matches/<int:match_id>/auto-advance/', auto_generate_next_round, name='match-auto-advance'),
+    # Add this line to handle the score updating!
+path('match/<int:match_id>/update/', update_match_winner, name='update-match-winner'),
     
    
     
@@ -34,8 +36,18 @@ urlpatterns = [
     path('judge/match/<int:match_id>/start/', start_match, name='start-match'),
     path('judge/match/<int:match_id>/live/', judge_live_match, name='judge-live-match'),
     path('judge/dashboard/', judge_dashboard, name='judge-dashboard'),
+    path('judge/', judge_dashboard, name='judge-dashboard'),
+    
+    
     path('judge/tournament/<int:tournament_id>/ring/<int:ring_number>/', judge_ring_matches, name='judge-ring-matches'),
     
     
-    path('route-dashboard/', dashboard_dispatcher, name='dashboard-dispatcher'),
+    # path('route-dashboard/', dashboard_dispatcher, name='dashboard-dispatcher'),
+    path('judge/match/<int:match_id>/api/live-data/', match_live_data, name='match-live-data'),
+    
+    path('judge/score/<int:score_id>/flag/', toggle_score_flag, name='toggle-score-flag'),
+    
+    
+    path('tournament/<int:tournament_id>/fixtures/manage/', manage_fixtures, name='manage-fixtures'),
+    path('judge/tournament/<int:tournament_id>/ring/<int:ring_number>/generate/', judge_generate_fixtures, name='judge-generate-fixtures'),
     ]

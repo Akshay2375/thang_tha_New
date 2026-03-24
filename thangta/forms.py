@@ -109,3 +109,4 @@ class FixtureGenerationForm(forms.Form):
         label="Assign to Ring Number",
         help_text="Which ring will this category fight in?"
     )
+    

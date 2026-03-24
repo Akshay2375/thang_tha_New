@@ -1,0 +1,36 @@
+{% for event in score_feed %}
+    <tr class="{% if event.is_flagged %}flagged-row opacity-50 text-decoration-line-through{% endif %}">
+        <td class="fw-bold text-muted">{{ event.sub_round }}</td>
+        
+        <td>
+            {% if event.is_foul %}
+                <span class="badge bg-warning text-dark fw-bold">⚠️ FOUL</span>
+                <span class="small ms-1">{{ event.foul_reason }}</span>
+            {% else %}
+                <span class="badge bg-success fw-bold">+{{ event.points }} PT</span>
+            {% endif %}
+        </td>
+        
+        <td class="fw-bold {% if event.participant == match.participant_red %}text-danger{% else %}text-primary{% endif %}">
+            {{ event.participant.name }}
+        </td>
+        
+        <td class="small text-light">{{ event.scorer.first_name|default:event.scorer.username }}</td>
+        
+        <td class="text-end">
+            <button type="button" onclick="toggleFlag({{ event.id }})" class="btn btn-sm {% if event.is_flagged %}btn-secondary{% else %}btn-outline-danger{% endif %} fw-bold shadow-sm">
+                {% if event.is_flagged %}
+                    ↺ Undo Flag
+                {% else %}
+                    🚩 Flag
+                {% endif %}
+            </button>
+        </td>
+    </tr>
+{% empty %}
+    <tr>
+        <td colspan="5" class="text-center text-light opacity-50 py-4 fst-italic">
+            Waiting for scorers to submit points...
+        </td>
+    </tr>
+{% endfor %}
