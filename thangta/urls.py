@@ -50,4 +50,9 @@ path('match/<int:match_id>/update/', update_match_winner, name='update-match-win
     
     path('tournament/<int:tournament_id>/fixtures/manage/', manage_fixtures, name='manage-fixtures'),
     path('judge/tournament/<int:tournament_id>/ring/<int:ring_number>/generate/', judge_generate_fixtures, name='judge-generate-fixtures'),
+    
+    path('scorer/dashboard/', scorer_dashboard, name='scorer-dashboard'),
+    path('scorer/tournament/<int:tournament_id>/ring/<int:ring_number>/', scorer_ring_matches, name='scorer-ring-matches'),
+    path('scorer/match/<int:match_id>/panel/', scorer_panel, name='scorer-panel'),
+    path('scorer/match/<int:match_id>/submit/', submit_score, name='submit-score'),
     ]

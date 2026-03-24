@@ -64,7 +64,7 @@ def tournament_results(request, tournament_id):
         'completed_matches': completed_matches
     })
 
-
+ 
 # ==========================================
 # 4. ADMIN: TOURNAMENT & PARTICIPANT CRUD
 # ==========================================
@@ -429,115 +429,142 @@ def manage_fixtures(request, tournament_id):
         'tournament': tournament,
         'form': form
     })
-    """Allows Admins and Judges to generate brackets independent of a specific ring."""
+    
+    
+    
+    
+# thangta/views.py
+from .permissions import scorer_required
+from .models import Score
+
+# ==========================================
+# 8. SCORER MAT CONTROL
+# ==========================================
+
+@scorer_required
+def scorer_dashboard(request):
+    """Shows live tournaments for the scorer to select a ring."""
+    today = timezone.now().date()
+    live_tournaments = Tournament.objects.filter(
+        start_date__lte=today
+    ).filter(Q(end_date__isnull=True) | Q(end_date__gt=today)).order_by('start_date')
+    
+    return render(request, 'scorer_dashboard.html', {'live_tournaments': live_tournaments})
+
+@scorer_required
+def scorer_ring_matches(request, tournament_id, ring_number):
+    """Shows the Scorer what match is currently LIVE on their ring."""
     tournament = get_object_or_404(Tournament, id=tournament_id)
     
-    if request.method == 'POST':
-        # Use the form to validate the incoming data
-        form = FixtureGenerationForm(request.POST)
-        if form.is_valid():
-            data = form.cleaned_data
-            
-            # Find eligible participants
-            participants = Participant.objects.filter(
-                tournament=tournament, 
-                event_type=data['event_type'], 
-                gender=data['gender'],
-                age_category=data['age_category'], 
-                weight_category=data['weight_category']
-            )
-
-            num_participants = participants.count()
-
-            if num_participants < 2:
-                messages.error(request, 'Not enough participants to create a bracket.')
-                return redirect('manage-fixtures', tournament_id=tournament.id)
-
-            # Shuffle for fair matchups
-            participant_list = list(participants)
-            random.shuffle(participant_list)
-
-            # Generate Round 1 matches
-            # Generate Round 1 matches
-            match_seq = 1
-            for i in range(0, num_participants, 2):
-                p1 = participant_list[i]
-                p2 = participant_list[i+1] if (i + 1) < num_participants else None
-
-                # NEW: Check if this match is a BYE (no p2)
-                is_bye = (p2 is None)
-
-                Match.objects.create(
-                    tournament=tournament, participant_red=p1, participant_blue=p2,
-                    ring_number=data['ring_number'], match_sequence=match_seq, round_number=1,
-                    gender=data['gender'], age_category=data['age_category'], 
-                    weight_category=data['weight_category'], event_type=data['event_type'],
-                    
-                    # NEW: Auto-complete and assign winner if it's a BYE!
-                    is_completed=is_bye,
-                    winner=p1 if is_bye else None
-                )
-                match_seq += 1
-            messages.success(request, 'Fixtures successfully generated!')
-            return redirect('tournament-matches', tournament_id=tournament.id)
-
-    else:
-        # GET REQUEST: Create a fresh, empty form to send to the template!
-        form = FixtureGenerationForm()
-
-    return render(request, 'manage_fixtures.html', {
+    # The Scorer only cares about the match that is currently ACTIVE
+    active_match = Match.objects.filter(
+        tournament=tournament, 
+        ring_number=ring_number, 
+        is_active=True, 
+        is_completed=False
+    ).first()
+    
+    return render(request, 'scorer_ring_matches.html', {
         'tournament': tournament,
-        'form': form # <-- This is what makes the dropdowns appear!
+        'ring_number': ring_number,
+        'active_match': active_match
     })
-    """Allows Admins and Judges to generate brackets independent of a specific ring."""
-    tournament = get_object_or_404(Tournament, id=tournament_id)
+
+@scorer_required
+def scorer_panel(request, match_id):
+    """The mobile-friendly interface with giant buttons to award points."""
+    match = get_object_or_404(Match, id=match_id)
+    corner = request.GET.get('corner', 'red')
     
+    # Security: Don't let them score a finished match
+    if match.is_completed or not match.is_active:
+        messages.warning(request, "This match is not currently active.")
+        return redirect('scorer-ring-matches', tournament_id=match.tournament.id, ring_number=match.ring_number)
+
+    return render(request, 'scorer_panel.html', {'match': match,'corner': corner})
+
+@scorer_required
+@require_POST
+def submit_score(request, match_id):
+    """Receives the button tap from the Scorer Panel and saves it to the database."""
+    match = get_object_or_404(Match, id=match_id)
+    
+    participant_id = request.POST.get('participant_id')
+    points = int(request.POST.get('points', 0))
+    is_foul = request.POST.get('is_foul') == 'true'
+    foul_reason = request.POST.get('foul_reason', '')
+
+    participant = get_object_or_404(Participant, id=participant_id)
+
+    # Create the score record!
+    Score.objects.create(
+        match=match,
+        participant=participant,
+        scorer=request.user,
+        points=points,
+        is_foul=is_foul,
+        foul_reason=foul_reason,
+        sub_round=match.current_sub_round
+    )
+    
+    # We use AJAX to submit scores so the page doesn't reload, keeping the scorer fast!
+    return JsonResponse({'status': 'success'})
+   
+   
+# thangta/views.py
+
+@judge_required
+def update_match_winner(request, match_id):
+    """Manually declares a winner, frees the ring, and auto-generates the next round."""
+    match = get_object_or_404(Match, id=match_id)
+    
+    if match.is_completed:
+        messages.info(request, "This match is already completed.")
+        return redirect('tournament-matches', tournament_id=match.tournament.id)
+
     if request.method == 'POST':
-        # Grab the data from your standard form
-        event_type = request.POST.get('event_type')
-        gender = request.POST.get('gender')
-        age_category = request.POST.get('age_category')
-        weight_category = request.POST.get('weight_category')
-        
-        # If your form has a ring_number dropdown, we use it. Otherwise, default to 1.
-        ring_number = int(request.POST.get('ring_number', 1))
-
-        # Find eligible participants
-        participants = Participant.objects.filter(
-            tournament=tournament, event_type=event_type, gender=gender,
-            age_category=age_category, weight_category=weight_category
-        )
-
-        num_participants = participants.count()
-
-        if num_participants < 2:
-            messages.error(request, 'Not enough participants to create a bracket.')
-            return redirect('manage-fixtures', tournament_id=tournament.id)
-
-        # Shuffle for fair matchups
-        participant_list = list(participants)
-        random.shuffle(participant_list)
-
-        # Generate Round 1 matches
-        match_seq = 1
-        for i in range(0, num_participants, 2):
-            p1 = participant_list[i]
-            p2 = participant_list[i+1] if (i + 1) < num_participants else None
-
-            Match.objects.create(
-                tournament=tournament, participant_red=p1, participant_blue=p2,
-                ring_number=ring_number, match_sequence=match_seq, round_number=1,
-                gender=gender, age_category=age_category, weight_category=weight_category, event_type=event_type
-            )
-            match_seq += 1
-
-        messages.success(request, f'Fixtures successfully generated!')
-        
-        # Redirect to the main Matches overview so they can see the new bracket
-        return redirect('tournament-matches', tournament_id=tournament.id)
-
-    # For GET requests, show the setup form
-    # Note: If you are using Django forms, you might pass 'form': FixtureGenerationForm() here instead
-    return render(request, 'manage_fixtures.html', {
-        'tournament': tournament
-    })
+        winner_id = request.POST.get('winner_id')
+        if winner_id:
+            winner = get_object_or_404(Participant, id=winner_id)
+            if winner == match.participant_red or winner == match.participant_blue:
+                match.winner = winner
+                match.is_completed = True
+                
+                # NEW: Free up the ring!
+                match.is_active = False 
+                match.save()
+                
+                # ... (The rest of your auto-generate next round logic stays exactly the same!)
+                category_matches = Match.objects.filter(
+                    tournament=match.tournament, event_type=match.event_type,
+                    gender=match.gender, age_category=match.age_category,
+                    weight_category=match.weight_category, round_number=match.round_number
+                )
+                
+                if not category_matches.filter(is_completed=False).exists():
+                    if category_matches.count() > 1:
+                        success, msg = generate_next_round(
+                            tournament=match.tournament, event_type=match.event_type,
+                            age_category=match.age_category, weight_category=match.weight_category,
+                            gender=match.gender, current_round=match.round_number, ring_number=match.ring_number
+                        )
+                        if success:
+                            messages.success(request, f"🏆 {winner.name} wins! Round {match.round_number + 1} automatically generated!")
+                            url = reverse('tournament-matches', args=[match.tournament.id])
+                            return redirect(f"{url}?round={match.round_number + 1}")
+                    else:
+                        messages.success(request, f"🏆 {winner.name} wins the Final! Category Complete.")
+                else:
+                    messages.success(request, f"🏆 {winner.name} declared as the winner!")
+                
+                # Go back to the Judge's Ring Dashboard so they can start the next fight!
+                return redirect('judge-ring-matches', tournament_id=match.tournament.id, ring_number=match.ring_number)
+            else:
+                messages.error(request, "Invalid winner selected.")
+    valid_scores = match.scores.filter(is_flagged=False, is_foul=False)
+    red_score = valid_scores.filter(participant=match.participant_red).aggregate(Sum('points'))['points__sum'] or 0
+    blue_score = 0
+    if match.participant_blue:
+        blue_score = valid_scores.filter(participant=match.participant_blue).aggregate(Sum('points'))['points__sum'] or 0
+    return render(request, 'match_update_score.html', {'match': match,'red_score': red_score,
+        'blue_score': blue_score})

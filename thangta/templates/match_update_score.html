@@ -2,58 +2,38 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Declare Winner - Round {{ match.round_number }}</title>
+    <title>Declare Winner</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="bg-light p-4 d-flex align-items-center" style="min-height: 100vh;">
+<body class="bg-light p-4 d-flex align-items-center justify-content-center" style="height: 100vh;">
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
+<div class="card shadow-lg border-0" style="max-width: 500px; width: 100%; border-radius: 15px;">
+    <div class="card-body p-5 text-center">
+        <h2 class="fw-bold mb-4">Declare Winner</h2>
+        <p class="text-muted mb-4">{{ match.full_category_name }}</p>
+
+        <form method="POST" action="{% url 'update-match-winner' match.id %}">
+            {% csrf_token %}
             
-            <div class="text-center mb-4">
-                <h2 class="fw-bold">Declare Match Winner</h2>
-                <p class="text-muted">Round {{ match.round_number }} | Match {{ match.match_sequence }} | Ring {{ match.ring_number }}</p>
-            </div>
+            <div class="d-grid gap-3">
+                <button type="submit" name="winner_id" value="{{ match.participant_red.id }}" class="btn btn-outline-danger btn-lg py-3 px-4 fw-bold fs-4 d-flex justify-content-between align-items-center">
+                    <span>🏆 {{ match.participant_red.name }}</span>
+                    <span class="badge bg-danger fs-5">{{ red_score }} PTS</span>
+                </button>
 
-            <div class="card shadow border-0 overflow-hidden">
-                <div class="row g-0">
-                    
-                    <div class="col-md-6 bg-danger bg-opacity-10 border-end border-danger border-3 p-5 text-center">
-                        <h5 class="text-danger fw-bold mb-1">RED CORNER</h5>
-                        <h3 class="fw-bold text-dark mb-4">{{ match.participant_red.name }}</h3>
-                        <p class="text-muted small">{{ match.participant_red.district }}</p>
-                        
-                        <form method="POST">
-                            {% csrf_token %}
-                            <input type="hidden" name="winner_id" value="{{ match.participant_red.id }}">
-                            <button type="submit" class="btn btn-danger btn-lg w-100 fw-bold shadow-sm">
-                                🏆 Red Wins
-                            </button>
-                        </form>
-                    </div>
-                    
-                    <div class="col-md-6 bg-primary bg-opacity-10 border-start border-primary border-3 p-5 text-center">
-                        <h5 class="text-primary fw-bold mb-1">BLUE CORNER</h5>
-                        <h3 class="fw-bold text-dark mb-4">{{ match.participant_blue.name }}</h3>
-                        <p class="text-muted small">{{ match.participant_blue.district }}</p>
-                        
-                        <form method="POST">
-                            {% csrf_token %}
-                            <input type="hidden" name="winner_id" value="{{ match.participant_blue.id }}">
-                            <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm">
-                                🏆 Blue Wins
-                            </button>
-                        </form>
-                    </div>
-                    
-                </div>
-            </div>
-            
-            <div class="text-center mt-4">
-                <a href="{% url 'tournament-matches' match.tournament.id %}" class="btn btn-outline-dark">Cancel and go back</a>
-            </div>
+                {% if match.participant_blue %}
+                <div class="text-muted fw-bold my-2">OR</div>
 
+                <button type="submit" name="winner_id" value="{{ match.participant_blue.id }}" class="btn btn-outline-primary btn-lg py-3 px-4 fw-bold fs-4 d-flex justify-content-between align-items-center">
+                    <span>🏆 {{ match.participant_blue.name }}</span>
+                    <span class="badge bg-primary fs-5">{{ blue_score }} PTS</span>
+                </button>
+                {% endif %}
+            </div>
+        </form>
+        
+        <div class="mt-4">
+            <a href="javascript:history.back()" class="btn btn-link text-muted">Cancel and go back to live match</a>
         </div>
     </div>
 </div>

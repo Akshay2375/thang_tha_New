@@ -46,3 +46,15 @@ def judge_required(view_func):
         return redirect('tournament-dashboard') 
         
     return _wrapped_view
+
+
+# thangta/permissions.py (Add to bottom)
+
+def scorer_required(view_func):
+    """Decorator to ensure Scorers (or Judges/Admins) can access the view."""
+    @login_required(login_url='login')
+    def _wrapped_view(request, *args, **kwargs):
+        if request.user.role in ['SCORER', 'JUDGE', 'ADMIN'] or request.user.is_superuser:
+            return view_func(request, *args, **kwargs)
+        return redirect('tournament-dashboard') 
+    return _wrapped_view

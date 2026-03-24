@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{{ corner|title }} Corner Scoring</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body, html { height: 100%; overflow: hidden; background-color: #121212; color: white;}
+        
+        .score-zone { height: 100vh; display: flex; flex-direction: column; padding: 1.5rem; }
+        
+        /* Dynamic Backgrounds */
+        .red-zone { background-color: #7a0b16; } /* Deep Red */
+        .blue-zone { background-color: #0b347a; } /* Deep Blue */
+        
+        /* Giant Tap Buttons */
+        .tap-btn { font-size: 2.5rem; font-weight: bold; border-radius: 1rem; padding: 1.5rem; margin-bottom: 1.5rem; border: none; width: 100%; box-shadow: 0 10px 0 rgba(0,0,0,0.3); transition: transform 0.1s; color: white;}
+        .tap-btn:active { transform: translateY(10px); box-shadow: none; }
+        
+        /* Button Colors based on Corner */
+        .red-zone .tap-btn { background-color: #dc3545; }
+        .blue-zone .tap-btn { background-color: #0d6efd; }
+        
+        /* The Foul Button is always Yellow/Warning */
+        .btn-foul { background-color: #ffc107 !important; color: black !important; font-size: 1.5rem; padding: 1.2rem; }
+        
+        #feedback-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; display: none; font-size: 1.5rem;}
+    </style>
+</head>
+<body>
+
+<div id="feedback-toast" class="alert alert-success fw-bold px-5 py-3 shadow-lg rounded-pill">Point Sent!</div>
+
+{% if corner == 'red' %}
+    <div class="score-zone red-zone text-center">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <a href="{% url 'scorer-ring-matches' match.tournament.id match.ring_number %}" class="btn btn-outline-light fw-bold">← Back</a>
+            <span class="badge bg-danger fs-5 border border-light">RED CORNER</span>
+        </div>
+        
+        <h1 class="fw-bold mb-5" style="font-size: 3rem;">{{ match.participant_red.name }}</h1>
+        
+        <button class="tap-btn" onclick="sendScore({{ match.participant_red.id }}, 1)">+ 1 Point</button>
+        <button class="tap-btn" onclick="sendScore({{ match.participant_red.id }}, 2)">+ 2 Points</button>
+        <button class="tap-btn" onclick="sendScore({{ match.participant_red.id }}, 3)">+ 3 Points</button>
+        
+        <div class="mt-auto pb-4">
+            <button class="tap-btn btn-foul" onclick="triggerFoul({{ match.participant_red.id }})">⚠️ Register Foul</button>
+        </div>
+    </div>
+
+{% else %}
+    <div class="score-zone blue-zone text-center">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <a href="{% url 'scorer-ring-matches' match.tournament.id match.ring_number %}" class="btn btn-outline-light fw-bold">← Back</a>
+            <span class="badge bg-primary fs-5 border border-light">BLUE CORNER</span>
+        </div>
+        
+        <h1 class="fw-bold mb-5" style="font-size: 3rem;">{{ match.participant_blue.name }}</h1>
+        
+        <button class="tap-btn" onclick="sendScore({{ match.participant_blue.id }}, 1)">+ 1 Point</button>
+        <button class="tap-btn" onclick="sendScore({{ match.participant_blue.id }}, 2)">+ 2 Points</button>
+        <button class="tap-btn" onclick="sendScore({{ match.participant_blue.id }}, 3)">+ 3 Points</button>
+        
+        <div class="mt-auto pb-4">
+            <button class="tap-btn btn-foul" onclick="triggerFoul({{ match.participant_blue.id }})">⚠️ Register Foul</button>
+        </div>
+    </div>
+{% endif %}
+
+<script>
+    // 1. The Foul Logic with Reason Prompt
+    function triggerFoul(participantId) {
+        // Native mobile popup keyboard will appear for them to type
+        let reason = prompt("Enter the exact reason for the foul:");
+        
+        // If they hit OK and typed something, send it!
+        if (reason !== null && reason.trim() !== "") {
+            sendScore(participantId, 0, true, reason.trim());
+        }
+    }
+
+    // 2. The standard score sending logic
+    function sendScore(participantId, points, isFoul = false, foulReason = '') {
+        const formData = new FormData();
+        formData.append('participant_id', participantId);
+        formData.append('points', points);
+        formData.append('is_foul', isFoul);
+        formData.append('foul_reason', foulReason);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        fetch("{% url 'submit-score' match.id %}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.status === 'success') {
+                const toast = document.getElementById('feedback-toast');
+                // Change toast message depending on what was sent
+                toast.innerText = isFoul ? "Foul Registered!" : points + " Point(s) Sent!";
+                toast.className = isFoul ? "alert alert-warning fw-bold px-5 py-3 shadow-lg rounded-pill" : "alert alert-success fw-bold px-5 py-3 shadow-lg rounded-pill";
+                
+                toast.style.display = 'block';
+                setTimeout(() => toast.style.display = 'none', 1000);
+            }
+        });
+    }
+</script>
+
+</body>
+</html>

@@ -71,9 +71,13 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core.wsgi.application'
 
 # core/settings.py
+# core/settings.py
 
-# LOGIN_REDIRECT_URL = 'dashboard-dispatcher'
-LOGIN_URL = 'login'
+# Where to send users the second they log in successfully
+LOGIN_REDIRECT_URL = 'tournament-dashboard'
+
+# Where to send users the second they log out
+LOGOUT_REDIRECT_URL = 'tournament-dashboard'
 # LOGOUT_REDIRECT_URL = 'tournament-dashboard'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases

@@ -59,7 +59,10 @@
                                 <a href="{% url 'judge-dashboard' %}" class="btn btn-warning btn-sm w-100 mb-2 fw-bold text-dark">⚖️ Select Ring & Judge</a>
                                 <a href="{% url 'manage-fixtures' tournament.id %}" class="btn btn-info btn-sm w-100 mb-2 text-white fw-bold">⚙️ Generate Fixtures</a>
                                 <a href="{% url 'tournament-matches' tournament.id %}" class="btn btn-primary btn-sm w-100 mb-2 fw-bold">🥊 View Matches</a>
-                            {% endif %}
+                                
+                                {% elif request.user.role == 'SCORER' %}
+                                    <a href="{% url 'scorer-dashboard' %}" class="btn btn-secondary btn-sm w-100 mb-2 fw-bold">📱 Enter Scorer Panel</a>
+                                {% endif %}
                             
                         {% endif %}
                         
