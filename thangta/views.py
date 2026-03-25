@@ -156,14 +156,53 @@ class OfficialCreateView(AdminRequiredMixin, CreateView):
 # ==========================================
 
  
-@judge_required
-def tournament_matches(request, tournament_id):
-    tournament = get_object_or_404(Tournament, id=tournament_id)
-    matches = Match.objects.filter(tournament=tournament).order_by(
-        'round_number', 'event_type', 'gender', 'age_category', 'weight_category', 'match_sequence'
-    )
-    return render(request, 'tournament_matches.html', {'tournament': tournament, 'matches': matches})
+# thangta/views.py
+from django.contrib.auth.decorators import login_required
 
+@login_required(login_url='login')
+def tournament_matches(request, tournament_id):
+    """Unified filter-driven Fixtures and Matches page for all roles."""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # 1. Start with ALL matches for this tournament
+    matches = Match.objects.filter(tournament=tournament)
+    
+    # 2. Capture the requested filters from the URL (GET parameters)
+    event_type = request.GET.get('event_type', '')
+    gender = request.GET.get('gender', '')
+    age_category = request.GET.get('age_category', '')
+    weight_category = request.GET.get('weight_category', '')
+    ring_number = request.GET.get('ring_number', '')
+
+    # 3. Apply the filters dynamically if they exist
+    if event_type:
+        matches = matches.filter(event_type=event_type)
+    if gender:
+        matches = matches.filter(gender=gender)
+    if age_category:
+        matches = matches.filter(age_category=age_category)
+    if weight_category:
+        matches = matches.filter(weight_category=weight_category)
+    if ring_number:
+        matches = matches.filter(ring_number=ring_number)
+
+    # 4. Order them logically
+    matches = matches.order_by('round_number', 'match_sequence')
+    
+    # 5. Send the current filters back to the template so the dropdowns stay selected!
+    current_filters = {
+        'event_type': event_type,
+        'gender': gender,
+        'age_category': age_category,
+        'weight_category': weight_category,
+        'ring_number': ring_number
+    }
+
+    return render(request, 'tournament_matches.html', {
+        'tournament': tournament,
+        'matches': matches,
+        'current_filters': current_filters
+    })
 
 @judge_required
 def update_match_winner(request, match_id):
@@ -441,6 +480,8 @@ from .models import Score
 # 8. SCORER MAT CONTROL
 # ==========================================
 
+ 
+ 
 @scorer_required
 def scorer_dashboard(request):
     """Shows live tournaments for the scorer to select a ring."""
@@ -456,7 +497,6 @@ def scorer_ring_matches(request, tournament_id, ring_number):
     """Shows the Scorer what match is currently LIVE on their ring."""
     tournament = get_object_or_404(Tournament, id=tournament_id)
     
-    # The Scorer only cares about the match that is currently ACTIVE
     active_match = Match.objects.filter(
         tournament=tournament, 
         ring_number=ring_number, 
@@ -471,48 +511,166 @@ def scorer_ring_matches(request, tournament_id, ring_number):
     })
 
 @scorer_required
-def scorer_panel(request, match_id):
-    """The mobile-friendly interface with giant buttons to award points."""
+def scorer_select_corner(request, match_id):
+    """The intermediate page for the scorer to pick Red or Blue."""
     match = get_object_or_404(Match, id=match_id)
-    corner = request.GET.get('corner', 'red')
     
-    # Security: Don't let them score a finished match
     if match.is_completed or not match.is_active:
         messages.warning(request, "This match is not currently active.")
-        return redirect('scorer-ring-matches', tournament_id=match.tournament.id, ring_number=match.ring_number)
+        return redirect('scorer-dashboard')
 
-    return render(request, 'scorer_panel.html', {'match': match,'corner': corner})
+    return render(request, 'scorer_select_corner.html', {'match': match})
+
+
+
+
+@scorer_required
+def scorer_panel(request, match_id):
+    """The mobile-friendly, single-fighter focused scoring panel."""
+    match = get_object_or_404(Match, id=match_id)
+    corner = request.GET.get('corner', 'red') 
+    
+    if match.is_completed or not match.is_active:
+        messages.warning(request, "This match is not currently active.")
+        return redirect('scorer-dashboard')
+
+    if corner == 'blue' and not match.participant_blue:
+        messages.error(request, "Invalid corner selected.")
+        return redirect('scorer-select-corner', match_id=match.id)
+
+    current_sub_round = getattr(match, 'current_sub_round', 1)
+    
+    participant = match.participant_red if corner == 'red' else match.participant_blue
+    valid_scores = Score.objects.filter(
+        match=match, participant=participant, is_flagged=False, is_foul=False, sub_round=current_sub_round
+    ).order_by('timestamp')
+    
+    points_list = [str(s.points) for s in valid_scores]
+    points_string = " + ".join(points_list) if points_list else ""
+    total_score = sum(s.points for s in valid_scores)
+    
+    # NEW: Count how many times they have actually scored
+    db_score_count = valid_scores.count()
+
+    return render(request, 'scorer_panel.html', {
+        'match': match,
+        'corner': corner,
+        'current_sub_round': current_sub_round, 
+        'points_string': points_string,
+        'total_score': total_score,
+        'db_score_count': db_score_count, # Pass the count to the frontend!
+    })
 
 @scorer_required
 @require_POST
 def submit_score(request, match_id):
-    """Receives the button tap from the Scorer Panel and saves it to the database."""
+    """AJAX endpoint to receive and save a score/foul."""
     match = get_object_or_404(Match, id=match_id)
     
     participant_id = request.POST.get('participant_id')
-    points = int(request.POST.get('points', 0))
     is_foul = request.POST.get('is_foul') == 'true'
     foul_reason = request.POST.get('foul_reason', '')
 
     participant = get_object_or_404(Participant, id=participant_id)
+    current_sub_round = getattr(match, 'current_sub_round', 1)
 
-    # Create the score record!
-    Score.objects.create(
-        match=match,
-        participant=participant,
-        scorer=request.user,
-        points=points,
-        is_foul=is_foul,
-        foul_reason=foul_reason,
-        sub_round=match.current_sub_round
-    )
+    if is_foul:
+        Score.objects.create(
+            match=match, participant=participant, scorer=request.user,
+            points=-3, is_foul=True, foul_reason=foul_reason, sub_round=current_sub_round 
+        )
+    else:
+        points_str = request.POST.get('points', '')
+        if points_str:
+            
+            incoming_points = []
+            for p_str in points_str.split(','):
+                try:
+                    p = int(p_str.strip())
+                    if p > 0:
+                        incoming_points.append(p)
+                except ValueError:
+                    pass
+            
+            # NEW: Check how many ENTRIES they already have, not the sum of points!
+            existing_count = Score.objects.filter(
+                match=match, participant=participant, is_flagged=False, is_foul=False, sub_round=current_sub_round
+            ).count()
+            
+            if existing_count + len(incoming_points) > 3:
+                return JsonResponse({'status': 'error', 'message': f'Max 3 score entries allowed per sub-round.'})
+            
+            for p in incoming_points:
+                Score.objects.create(
+                    match=match, participant=participant, scorer=request.user,
+                    points=p, is_foul=False, sub_round=current_sub_round 
+                )
     
-    # We use AJAX to submit scores so the page doesn't reload, keeping the scorer fast!
     return JsonResponse({'status': 'success'})
-   
-   
-# thangta/views.py
 
+@scorer_required
+@require_POST
+def submit_score(request, match_id):
+    """AJAX endpoint to receive and save a score/foul."""
+    match = get_object_or_404(Match, id=match_id)
+    
+    participant_id = request.POST.get('participant_id')
+    is_foul = request.POST.get('is_foul') == 'true'
+    foul_reason = request.POST.get('foul_reason', '')
+
+    participant = get_object_or_404(Participant, id=participant_id)
+    current_sub_round = getattr(match, 'current_sub_round', 1)
+
+    if is_foul:
+        # Save a single foul
+        Score.objects.create(
+            match=match, participant=participant, scorer=request.user,
+            points=-3, is_foul=True, foul_reason=foul_reason, sub_round=current_sub_round 
+        )
+    else:
+        # Save multiple points sent as a combo string (e.g., "1,2,1")
+        points_str = request.POST.get('points', '')
+        if points_str:
+            for p_str in points_str.split(','):
+                try:
+                    p = int(p_str.strip())
+                    if p > 0:
+                        Score.objects.create(
+                            match=match, participant=participant, scorer=request.user,
+                            points=p, is_foul=False, sub_round=current_sub_round 
+                        )
+                except ValueError:
+                    continue
+    
+    return JsonResponse({'status': 'success'})
+@scorer_required
+def fetch_score_history(request, match_id):
+    """AJAX endpoint to return the score history table snippet."""
+    match = get_object_or_404(Match, id=match_id)
+    
+    # NEW: Only show the history for the corner the scorer is currently sitting at!
+    corner = request.GET.get('corner', 'red')
+    participant = match.participant_red if corner == 'red' else match.participant_blue
+    
+    scores = Score.objects.filter(match=match, participant=participant, is_foul=False).order_by('-timestamp')
+    
+    response = render(request, 'scorer_history_table.html', {'scores': scores})
+    # Attach the sub-round for the auto-refresh check
+    response['X-Current-Sub-Round'] = getattr(match, 'current_sub_round', 1)
+    return response
+
+@scorer_required
+def fetch_foul_history(request, match_id):
+    """AJAX endpoint to return the foul history table snippet."""
+    match = get_object_or_404(Match, id=match_id)
+    
+    # NEW: Only show the history for the corner the scorer is currently sitting at!
+    corner = request.GET.get('corner', 'red')
+    participant = match.participant_red if corner == 'red' else match.participant_blue
+    
+    fouls = Score.objects.filter(match=match, participant=participant, is_foul=True).order_by('-timestamp')
+    
+    return render(request, 'scorer_foul_table.html', {'fouls': fouls})
 @judge_required
 def update_match_winner(request, match_id):
     """Manually declares a winner, frees the ring, and auto-generates the next round."""

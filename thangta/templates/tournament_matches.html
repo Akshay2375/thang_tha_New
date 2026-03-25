@@ -11,68 +11,169 @@
         .blue-corner { background-color: #e6f2ff; color: #0d6efd; border: 1px solid #b6d4fe; }
         .bye-corner { background-color: #f8f9fa; color: #6c757d; border: 1px dashed #ced4da; font-style: italic; }
         .round-header { background-color: #f1f5f9; padding: 10px 20px; border-radius: 8px; color: #1e293b; font-weight: bold; margin-bottom: 1.5rem; }
+        
+        /* NEW: Bracket Layout CSS */
+        .bracket-container { display: flex; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2rem; gap: 2rem; }
+        .round-column { display: flex; flex-direction: column; min-width: 340px; max-width: 340px; }
+        
+        /* Custom scrollbar for the bracket view */
+        .bracket-container::-webkit-scrollbar { height: 10px; }
+        .bracket-container::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 8px; }
+        .bracket-container::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 8px; }
+        .bracket-container::-webkit-scrollbar-thumb:hover { background: #64748b; }
     </style>
 </head>
 <body class="bg-light p-4">
 
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-5">
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold m-0">Tournament Fixtures</h2>
+            <h2 class="fw-bold m-0">🏆 Tournament Fixtures</h2>
             <p class="text-muted fs-5 m-0">{{ tournament.name }}</p>
         </div>
         <div class="d-flex gap-2">
             {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
                 <a href="{% url 'manage-fixtures' tournament.id %}" class="btn btn-warning fw-bold text-dark shadow-sm">+ Generate New Bracket</a>
             {% endif %}
-            <a href="{% url 'tournament-dashboard' %}" class="btn btn-outline-dark shadow-sm">← Back to Dashboard</a>
+            <a href="{% url 'tournament-dashboard' %}" class="btn btn-outline-dark shadow-sm">← Dashboard</a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-5 rounded-3">
+        <div class="card-body p-4 bg-white">
+            <form method="GET" class="row g-3 align-items-end">
+                
+                <div class="col-md-2">
+                    <label class="form-label text-muted small fw-bold">Event</label>
+                    <select name="event_type" class="form-select">
+                        <option value="">All Events</option>
+                        <option value="Phunaba-Ama" {% if current_filters.event_type == 'Phunaba-Ama' %}selected{% endif %}>Phunaba-Ama</option>
+                        <option value="Phunaba-Anishuba" {% if current_filters.event_type == 'Phunaba-Anishuba' %}selected{% endif %}>Phunaba-Anishuba</option>
+                    </select>
+                </div>
+                
+                <div class="col-md-2">
+                    <label class="form-label text-muted small fw-bold">Gender</label>
+                    <select name="gender" class="form-select">
+                        <option value="">All Genders</option>
+                        <option value="Male" {% if current_filters.gender == 'Male' %}selected{% endif %}>Male</option>
+                        <option value="Female" {% if current_filters.gender == 'Female' %}selected{% endif %}>Female</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label text-muted small fw-bold">Age Category</label>
+                    <select name="age_category" class="form-select">
+                        <option value="">All Ages</option>
+                        <option value="U14" {% if current_filters.age_category == 'U14' %}selected{% endif %}>Under 14</option>
+                        <option value="U18" {% if current_filters.age_category == 'U18' %}selected{% endif %}>Under 18</option>
+                        <option value="O18" {% if current_filters.age_category == 'O18' %}selected{% endif %}>Over 18</option>
+                    </select>
+                </div>
+                
+                <div class="col-md-2">
+                    <label class="form-label text-muted small fw-bold">Weight Category</label>
+                    <select name="weight_category" class="form-select">
+                        <option value="">All Weights</option>
+                        <option value="-21" {% if current_filters.weight_category == '-21' %}selected{% endif %}>-21 Kg</option>
+                        <option value="-25" {% if current_filters.weight_category == '-25' %}selected{% endif %}>-25 Kg</option>
+                        <option value="-29" {% if current_filters.weight_category == '-29' %}selected{% endif %}>-29 Kg</option>
+                        <option value="-33" {% if current_filters.weight_category == '-33' %}selected{% endif %}>-33 Kg</option>
+                        <option value="-37" {% if current_filters.weight_category == '-37' %}selected{% endif %}>-37 Kg</option>
+                        <option value="-40" {% if current_filters.weight_category == '-40' %}selected{% endif %}>-40 Kg</option>
+                        <option value="-41" {% if current_filters.weight_category == '-41' %}selected{% endif %}>-41 Kg</option>
+                        <option value="-44" {% if current_filters.weight_category == '-44' %}selected{% endif %}>-44 Kg</option>
+                        <option value="-45" {% if current_filters.weight_category == '-45' %}selected{% endif %}>-45 Kg</option>
+                        <option value="-49" {% if current_filters.weight_category == '-49' %}selected{% endif %}>-49 Kg</option>
+                        <option value="-52" {% if current_filters.weight_category == '-52' %}selected{% endif %}>-52 Kg</option>
+                        <option value="-53" {% if current_filters.weight_category == '-53' %}selected{% endif %}>-53 Kg</option>
+                        <option value="-56" {% if current_filters.weight_category == '-56' %}selected{% endif %}>-56 Kg</option>
+                        <option value="-75" {% if current_filters.weight_category == '-75' %}selected{% endif %}>-75 Kg</option>
+                        <option value="+53" {% if current_filters.weight_category == '+53' %}selected{% endif %}>+53 Kg</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label text-muted small fw-bold">Ring No.</label>
+                    <select name="ring_number" class="form-select">
+                        <option value="">All Rings</option>
+                        <option value="1" {% if current_filters.ring_number == '1' %}selected{% endif %}>Ring 1</option>
+                        <option value="2" {% if current_filters.ring_number == '2' %}selected{% endif %}>Ring 2</option>
+                        <option value="3" {% if current_filters.ring_number == '3' %}selected{% endif %}>Ring 3</option>
+                        <option value="4" {% if current_filters.ring_number == '4' %}selected{% endif %}>Ring 4</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-dark w-100 fw-bold shadow-sm">Filter</button>
+                    <a href="{% url 'tournament-matches' tournament.id %}" class="btn btn-outline-secondary shadow-sm">Clear</a>
+                </div>
+            </form>
         </div>
     </div>
 
     {% regroup matches by round_number as rounds %}
     
     {% if rounds %}
-        {% for round in rounds %}
-            <div class="mb-5">
-                <h3 class="round-header shadow-sm">Round {{ round.grouper }}</h3>
-                
-                <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-                    {% for match in round.list %}
-                    <div class="col">
-                        <div class="card match-card h-100">
-                            <div class="card-body text-center p-4 d-flex flex-column">
-                                <p class="text-muted small mb-1">{{ match.full_category_name }}</p>
-                                <h6 class="fw-bold mb-4 text-dark">Ring {{ match.ring_number }} • Match {{ match.match_sequence }}</h6>
-                                
-                                <div class="fighter-box red-corner mb-2">{{ match.participant_red.name }}</div>
-                                
-                                <div class="fw-bold text-muted mb-2 small">VS</div>
-                                
-                                {% if match.participant_blue %}
-                                    <div class="fighter-box blue-corner mb-4">{{ match.participant_blue.name }}</div>
-                                {% else %}
-                                    <div class="fighter-box bye-corner mb-4">BYE (No Opponent)</div>
-                                {% endif %}
-                                
-                                <div class="mt-auto">
-                                    {% if match.is_completed %}
-                                        <div class="alert alert-success m-0 py-2 fw-bold shadow-sm">🏆 Winner: {{ match.winner.name }}</div>
-                                    {% elif match.is_active %}
-                                        <a href="{% url 'update-match-winner' match.id %}" class="btn btn-warning w-100 fw-bold text-dark shadow-sm">🔴 LIVE - Update Score</a>
+        <div class="bracket-container">
+            {% for round in rounds %}
+                <div class="round-column">
+                    <h3 class="round-header shadow-sm text-center">Round {{ round.grouper }}</h3>
+                    
+                    <div class="d-flex flex-column gap-4">
+                        {% for match in round.list %}
+                            <div class="card match-card {% if match.is_completed %}opacity-75{% endif %}">
+                                <div class="card-body text-center p-4 d-flex flex-column">
+                                    
+                                    <p class="text-muted small mb-1">{{ match.full_category_name }}</p>
+                                    <h6 class="fw-bold mb-4 text-dark">Ring {{ match.ring_number }} • Match {{ match.match_sequence }}</h6>
+                                    
+                                    <div class="fighter-box red-corner mb-2">{{ match.participant_red.name }}</div>
+                                    <div class="fw-bold text-muted mb-2 small">VS</div>
+                                    
+                                    {% if match.participant_blue %}
+                                        <div class="fighter-box blue-corner mb-4">{{ match.participant_blue.name }}</div>
                                     {% else %}
-                                        <a href="{% url 'update-match-winner' match.id %}" class="btn btn-success w-100 fw-bold shadow-sm">Update Score</a>
+                                        <div class="fighter-box bye-corner mb-4">BYE (No Opponent)</div>
                                     {% endif %}
+                                    
+                                    <div class="mt-auto">
+                                        {% if match.is_completed %}
+                                            <div class="alert alert-success m-0 py-2 fw-bold shadow-sm">🏆 Winner: {{ match.winner.name }}</div>
+                                        
+                                        {% elif match.is_active %}
+                                            <div class="alert alert-warning m-0 py-2 fw-bold shadow-sm mb-2 text-dark">🔴 LIVE MATCH</div>
+                                            
+                                            {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
+                                                <a href="{% url 'judge-live-match' match.id %}" class="btn btn-dark w-100 fw-bold shadow-sm">Enter Judge Panel</a>
+                                            {% elif request.user.role == 'SCORER' %}
+                                                <a href="{% url 'scorer-select-corner' match.id %}" class="btn btn-primary w-100 fw-bold shadow-sm">📱 Score Match</a>
+                                            {% endif %}
+                                            
+                                        {% else %}
+                                            <span class="badge bg-light text-dark border p-2 mb-2 w-100">Waiting to Start</span>
+                                            
+                                            {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
+                                                <form action="{% url 'start-match' match.id %}" method="POST" class="m-0">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm">Start Match</button>
+                                                </form>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
-            </div>
-        {% endfor %}
+            {% endfor %}
+        </div>
     {% else %}
         <div class="text-center py-5">
-            <h4 class="text-muted fst-italic">No matches have been generated yet.</h4>
+            <h4 class="text-muted fst-italic">No matches found for these filters.</h4>
+            {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
+                <p class="text-muted mt-2">Try adjusting your filters or generate a new bracket.</p>
+            {% endif %}
         </div>
     {% endif %}
 

@@ -1,0 +1,9 @@
+{% for foul in fouls %}
+<tr>
+    <td>{{ foul.sub_round }}</td>
+    <td>{{ foul.foul_reason }}</td>
+    <td>{{ foul.timestamp|date:"P" }}</td>
+</tr>
+{% empty %}
+<tr><td colspan="3" class="text-center text-muted">No fouls recorded yet</td></tr>
+{% endfor %}

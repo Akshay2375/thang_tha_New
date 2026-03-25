@@ -3,92 +3,284 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>{{ corner|title }} Corner Scoring</title>
+    <title>SCORING PANEL - {{ corner|upper }} CORNER</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body, html { height: 100%; overflow: hidden; background-color: #121212; color: white;}
+        body, html { height: 100%; overflow: auto; background-color: #f0f4f8; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;}
         
-        .score-zone { height: 100vh; display: flex; flex-direction: column; padding: 1.5rem; }
+        .page-container { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+        .scoring-card { background: white; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); padding: 2.5rem; margin-bottom: 2rem; border: none; }
         
-        /* Dynamic Backgrounds */
-        .red-zone { background-color: #7a0b16; } /* Deep Red */
-        .blue-zone { background-color: #0b347a; } /* Deep Blue */
+        .main-header { display: flex; align-items: center; justify-content: center; margin-bottom: 2.5rem; }
+        .main-header h1 { font-size: 2.5rem; font-weight: bold; color: #4338ca; margin-left: 1rem;}
         
-        /* Giant Tap Buttons */
-        .tap-btn { font-size: 2.5rem; font-weight: bold; border-radius: 1rem; padding: 1.5rem; margin-bottom: 1.5rem; border: none; width: 100%; box-shadow: 0 10px 0 rgba(0,0,0,0.3); transition: transform 0.1s; color: white;}
-        .tap-btn:active { transform: translateY(10px); box-shadow: none; }
+        .fighter-info-card { border-radius: 15px; padding: 1.5rem 1rem; color: white; margin-bottom: 1.5rem;}
+        .red-info-card { background: linear-gradient(135deg, #fecaca 0%, #dc3545 100%); }
+        .blue-info-card { background: linear-gradient(135deg, #bbf7d0 0%, #0d6efd 100%); }
+        .fighter-info-card h4 { font-weight: bold; font-size: 1.1rem; }
+        .fighter-info-card p { font-size: 1.2rem; font-weight: bold; margin: 0; }
+        .fighter-info-card .location { font-size: 0.85rem; font-weight: normal; margin-top: 0.2rem;}
+
+        .control-bar { background-color: #fffbeb; border-radius: 10px; border: 1px solid #fef3c7; padding: 1rem; margin-bottom: 2rem; text-align: center; }
+        .control-bar label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; color: #78350f; display: block; margin-bottom: 0.3rem;}
+        .corner-label { font-size: 1.2rem; display: block; margin-top: 0.5rem;}
         
-        /* Button Colors based on Corner */
-        .red-zone .tap-btn { background-color: #dc3545; }
-        .blue-zone .tap-btn { background-color: #0d6efd; }
+        .section-title { font-size: 1.4rem; font-weight: bold; color: #1e293b; margin-bottom: 1.5rem;}
+        .score-row { display: flex; justify-content: center; gap: 1.5rem; align-items: center; }
         
-        /* The Foul Button is always Yellow/Warning */
-        .btn-foul { background-color: #ffc107 !important; color: black !important; font-size: 1.5rem; padding: 1.2rem; }
+        .large-point-btn { font-size: 2.5rem; font-weight: bold; border-radius: 50%; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; color: white; background-color: #1e293b; border: 4px solid #1e293b; transition: all 0.2s;}
+        .large-point-btn:active { transform: scale(0.95); background-color: #0d6efd; border-color: #0d6efd;}
+        .large-point-btn:disabled { background-color: #cbd5e1; border-color: #cbd5e1; opacity: 0.6; cursor: not-allowed;}
         
-        #feedback-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; display: none; font-size: 1.5rem;}
+        .total-box { border-radius: 12px; padding: 1.5rem; font-weight: bold; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%;}
+        .total-box label { font-size: 0.8rem; text-transform: uppercase; display: block; margin-bottom: 0.5rem;}
+        .total-box p { font-size: 2.2rem; margin: 0; line-height: 1.2;}
+        
+        .selected-pts-box { background-color: white; border: 1px solid #e2e8f0; }
+        .selected-pts-box label { color: #64748b; }
+        .selected-pts-box p { color: #dc3545; } 
+        
+        .total-pts-box { background-color: #2563eb; border: none; }
+        .total-pts-box label { color: #93c5fd; }
+        .total-pts-box p { color: white; }
+        
+        .clear-btn { background-color: #f97316; color: white; font-weight: bold; border-radius: 8px; border: none; transition: transform 0.1s; }
+        .clear-btn:active { transform: scale(0.98); }
+
+        .foul-box { background-color: #fff1f2; border: 1px solid #fecdd3; border-radius: 10px; padding: 1.5rem; text-align: center; margin-top: 2.5rem; margin-bottom: 2rem; }
+        .foul-box h5 { color: #dc3545; font-weight: bold; margin-bottom: 1.2rem; }
+        .foul-btn { border: 1px solid #dc3545; color: #dc3545; background-color: white; font-weight: bold; border-radius: 8px; font-size: 0.9rem;}
+        .foul-btn.active { background-color: #dc3545; color: white; }
+        
+        .submit-btn { background-color: #16a34a; color: white; font-weight: bold; font-size: 1.1rem; padding: 1rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);}
+
+        .history-card { background: white; border-radius: 20px; padding: 2.5rem; margin-bottom: 2rem; }
+        .history-card h3 { font-size: 1.4rem; font-weight: bold; color: #1e293b; margin-bottom: 1.5rem;}
+        .history-card table { font-size: 0.9rem;}
+        .history-card table thead { background-color: #f1f5f9; color: #475569;}
+        .score-table thead { background-color: #0d6efd; color: white;}
+        .foul-table thead { background-color: #dc3545; color: white;}
+        
+        #feedback-toast { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2000; display: none; font-size: 1.5rem; border-radius: 50px; }
     </style>
 </head>
 <body>
 
-<div id="feedback-toast" class="alert alert-success fw-bold px-5 py-3 shadow-lg rounded-pill">Point Sent!</div>
+<div id="feedback-toast" class="alert fw-bold px-5 py-3 shadow-lg rounded-pill"></div>
 
-{% if corner == 'red' %}
-    <div class="score-zone red-zone text-center">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <a href="{% url 'scorer-ring-matches' match.tournament.id match.ring_number %}" class="btn btn-outline-light fw-bold">← Back</a>
-            <span class="badge bg-danger fs-5 border border-light">RED CORNER</span>
+<div class="page-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <a href="{% url 'scorer-select-corner' match.id %}" class="btn btn-outline-dark fw-bold">← Back to corner selection</a>
+        <span class="fw-bold">Ring {{ match.ring_number }} • Match {{ match.match_sequence }}</span>
+    </div>
+    
+    <div class="scoring-card">
+        <div class="main-header">
+            <h1 class="text-uppercase mb-0">Scoring Panel</h1>
         </div>
-        
-        <h1 class="fw-bold mb-5" style="font-size: 3rem;">{{ match.participant_red.name }}</h1>
-        
-        <button class="tap-btn" onclick="sendScore({{ match.participant_red.id }}, 1)">+ 1 Point</button>
-        <button class="tap-btn" onclick="sendScore({{ match.participant_red.id }}, 2)">+ 2 Points</button>
-        <button class="tap-btn" onclick="sendScore({{ match.participant_red.id }}, 3)">+ 3 Points</button>
-        
-        <div class="mt-auto pb-4">
-            <button class="tap-btn btn-foul" onclick="triggerFoul({{ match.participant_red.id }})">⚠️ Register Foul</button>
+
+        {% if corner == 'red' %}
+        <div class="fighter-info-card red-info-card text-center">
+            <h4 class="text-danger-emphasis">Red Corner</h4>
+            <p>{{ match.participant_red.name|upper }}</p>
+            <span class="location">{{ match.participant_red.city|default:"No City" }}</span>
         </div>
+        {% else %}
+        <div class="fighter-info-card blue-info-card text-center">
+            <h4 class="text-primary-emphasis">Blue Corner</h4>
+            <p>{{ match.participant_blue.name|upper }}</p>
+            <span class="location">{{ match.participant_blue.city|default:"No City" }}</span>
+        </div>
+        {% endif %}
+        
+        <div class="control-bar row g-0">
+            <div class="col-6 px-2">
+                <label>Sub-round</label>
+                <div class="corner-label fw-bold text-dark border rounded bg-white py-1 shadow-sm">
+                    {{ current_sub_round }}
+                </div>
+            </div>
+            <div class="col-6 px-2">
+                <label>Your Corner</label>
+                {% if corner == 'red' %}
+                    <span class="corner-label fw-bold text-danger">RED</span>
+                {% else %}
+                    <span class="corner-label fw-bold text-primary">BLUE</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="text-center mb-5">
+            <h4 class="section-title text-uppercase">Score Input</h4>
+            <div class="score-row px-5">
+                <button id="btn-point-1" class="btn large-point-btn shadow-sm" onclick="prepareScore(1)">1</button>
+                <button id="btn-point-2" class="btn large-point-btn shadow-sm" onclick="prepareScore(2)">2</button>
+            </div>
+            
+            <div class="row mt-4 px-2 px-md-5 g-3">
+                <div class="col-6">
+                    <div class="total-box selected-pts-box shadow-sm">
+                        <label>Selected Points</label>
+                        <p id="ui-sequence">—</p>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="total-box total-pts-box shadow-sm">
+                        <label>Total</label>
+                        <p id="ui-total">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-4">
+                <button class="btn btn-sm clear-btn px-4 py-2 shadow-sm" onclick="clearPreparedScore()">🔄 Clear Scores</button>
+            </div>
+        </div>
+
+        <div class="foul-box">
+            <h5 class="text-uppercase"><img src="https://img.icons8.com/emoji/48/warning-emoji.png" alt="warning icon" class="me-2" style="width: 25px;"/> Fouls (-3 points each)</h5>
+            <div class="d-flex gap-2 justify-content-center flex-wrap">
+                <button class="btn foul-btn px-3 py-2 foul-type-btn" onclick="toggleFoul(this, 'Cheibi Tare')">Cheibi Tare</button>
+                <button class="btn foul-btn px-3 py-2 foul-type-btn" onclick="toggleFoul(this, 'Chengoi Tare')">Chengoi Tare</button>
+                <button class="btn foul-btn px-3 py-2 foul-type-btn" onclick="toggleFoul(this, 'General Foul')">General Foul</button>
+            </div>
+        </div>
+
+        <div class="text-center">
+            {% if corner == 'red' %}
+                <button class="btn submit-btn w-100" id="submit-scores-btn" onclick="submitScores({{ match.participant_red.id }})">
+                    ✓ Submit Scores
+                </button>
+            {% else %}
+                <button class="btn submit-btn w-100" id="submit-scores-btn" onclick="submitScores({{ match.participant_blue.id }})">
+                    ✓ Submit Scores
+                </button>
+            {% endif %}
+        </div>
+
     </div>
 
-{% else %}
-    <div class="score-zone blue-zone text-center">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <a href="{% url 'scorer-ring-matches' match.tournament.id match.ring_number %}" class="btn btn-outline-light fw-bold">← Back</a>
-            <span class="badge bg-primary fs-5 border border-light">BLUE CORNER</span>
-        </div>
-        
-        <h1 class="fw-bold mb-5" style="font-size: 3rem;">{{ match.participant_blue.name }}</h1>
-        
-        <button class="tap-btn" onclick="sendScore({{ match.participant_blue.id }}, 1)">+ 1 Point</button>
-        <button class="tap-btn" onclick="sendScore({{ match.participant_blue.id }}, 2)">+ 2 Points</button>
-        <button class="tap-btn" onclick="sendScore({{ match.participant_blue.id }}, 3)">+ 3 Points</button>
-        
-        <div class="mt-auto pb-4">
-            <button class="tap-btn btn-foul" onclick="triggerFoul({{ match.participant_blue.id }})">⚠️ Register Foul</button>
-        </div>
+    <div class="history-card">
+        <h3><img src="https://img.icons8.com/fluency-system-filled/48/1e293b/scorecard.png" alt="score history icon" class="me-2" style="width: 20px;"/> Score History</h3>
+        <table class="table table-bordered score-table">
+            <thead><tr><th>Sub-round</th><th>Score</th><th>Time</th></tr></thead>
+            <tbody id="score-history-tbody">
+                <tr><td colspan="3" class="text-center text-muted">Loading history...</td></tr>
+            </tbody>
+        </table>
     </div>
-{% endif %}
 
+    <div class="history-card">
+        <h3><img src="https://img.icons8.com/material-outlined/48/dc3545/error.png" alt="foul history icon" class="me-2" style="width: 20px;"/> Foul History</h3>
+        <table class="table table-bordered foul-table">
+            <thead><tr><th>Sub-round</th><th>Type</th><th>Time</th></tr></thead>
+            <tbody id="foul-history-tbody">
+                <tr><td colspan="3" class="text-center text-muted">Loading history...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="text-center mb-5 pb-5">
+        <a href="{% url 'scorer-ring-matches' match.tournament.id match.ring_number %}" class="btn btn-danger btn-lg w-100 shadow fw-bold p-3" style="border-radius: 12px; max-width: 500px;">🛑 End Scoring & Exit</a>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // 1. The Foul Logic with Reason Prompt
-    function triggerFoul(participantId) {
-        // Native mobile popup keyboard will appear for them to type
-        let reason = prompt("Enter the exact reason for the foul:");
-        
-        // If they hit OK and typed something, send it!
-        if (reason !== null && reason.trim() !== "") {
-            sendScore(participantId, 0, true, reason.trim());
+    // Database State
+    let dbPointsString = "{{ points_string|escapejs }}";
+    let dbTotalScore = parseInt("{{ total_score }}") || 0;
+    
+    // NEW: Track the number of entries!
+    let dbScoreCount = parseInt("{{ db_score_count }}") || 0;
+    
+    // Local Pending State
+    let pendingScores = [];
+    let selectedFoulType = null;
+    let currentActiveSubRound = parseInt("{{ current_sub_round }}");
+
+    // Master UI Updater
+    function updateUI() {
+        if (selectedFoulType) {
+            document.getElementById('ui-sequence').innerText = 'FOUL';
+            document.getElementById('ui-sequence').className = 'text-danger fw-bold';
+            document.getElementById('ui-total').innerText = dbTotalScore + " (-3)";
+            
+            document.getElementById('btn-point-1').disabled = false;
+            document.getElementById('btn-point-2').disabled = false;
+            return;
         }
+
+        // Calculate math sum
+        let total = dbTotalScore + pendingScores.reduce((a, b) => a + b, 0);
+
+        // Build display string
+        let sequenceStr = dbPointsString;
+        if (pendingScores.length > 0) {
+            let pendingStr = pendingScores.join(' + ');
+            if (sequenceStr !== "") {
+                sequenceStr += " + " + pendingStr;
+            } else {
+                sequenceStr = pendingStr;
+            }
+        }
+
+        document.getElementById('ui-sequence').innerText = sequenceStr === "" ? "—" : sequenceStr;
+        document.getElementById('ui-sequence').className = sequenceStr === "" ? "" : 'text-danger fw-bold';
+        document.getElementById('ui-total').innerText = total;
+
+        // NEW RULE: Disable buttons if they hit 3 ENTRIES total
+        let totalEntries = dbScoreCount + pendingScores.length;
+        document.getElementById('btn-point-1').disabled = (totalEntries >= 3);
+        document.getElementById('btn-point-2').disabled = (totalEntries >= 3);
     }
 
-    // 2. The standard score sending logic
-    function sendScore(participantId, points, isFoul = false, foulReason = '') {
+    function prepareScore(points) {
+        clearFoulSelection();
+        pendingScores.push(points);
+        updateUI();
+    }
+
+    function clearPreparedScore() {
+        pendingScores = [];
+        clearFoulSelection();
+        updateUI();
+    }
+
+    function toggleFoul(btn, foulType) {
+        pendingScores = []; 
+        const foulButtons = document.querySelectorAll('.foul-type-btn');
+        foulButtons.forEach(b => b.classList.remove('active'));
+
+        btn.classList.add('active');
+        selectedFoulType = foulType;
+        updateUI();
+    }
+
+    function clearFoulSelection() {
+        const foulButtons = document.querySelectorAll('.foul-type-btn');
+        foulButtons.forEach(b => b.classList.remove('active'));
+        selectedFoulType = null;
+    }
+
+    function submitScores(participantId) {
+        if (pendingScores.length === 0 && selectedFoulType === null) {
+            flashToast("Error", "Please select points or a foul first.", "danger");
+            return;
+        }
+
         const formData = new FormData();
         formData.append('participant_id', participantId);
-        formData.append('points', points);
-        formData.append('is_foul', isFoul);
-        formData.append('foul_reason', foulReason);
+        formData.append('is_foul', selectedFoulType !== null);
+        formData.append('foul_reason', selectedFoulType || '');
+        
+        formData.append('points', pendingScores.join(','));
         formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        const submitBtn = document.getElementById('submit-scores-btn');
+        submitBtn.disabled = true;
+        submitBtn.innerText = "Processing...";
 
         fetch("{% url 'submit-score' match.id %}", {
             method: 'POST',
@@ -97,16 +289,65 @@
         .then(response => response.json())
         .then(data => {
             if(data.status === 'success') {
-                const toast = document.getElementById('feedback-toast');
-                // Change toast message depending on what was sent
-                toast.innerText = isFoul ? "Foul Registered!" : points + " Point(s) Sent!";
-                toast.className = isFoul ? "alert alert-warning fw-bold px-5 py-3 shadow-lg rounded-pill" : "alert alert-success fw-bold px-5 py-3 shadow-lg rounded-pill";
+                if (selectedFoulType !== null) {
+                    flashToast("Success", "✓ Foul registered!", "warning");
+                } else {
+                    flashToast("Success", "✓ Combo submitted!", "success");
+                    
+                    // Update internal Database state locally
+                    let incomingTotal = pendingScores.reduce((a, b) => a + b, 0);
+                    dbTotalScore += incomingTotal;
+                    dbScoreCount += pendingScores.length; // Update the ENTRY count!
+                    
+                    let pendingStr = pendingScores.join(' + ');
+                    if (dbPointsString !== "") { dbPointsString += " + " + pendingStr; } 
+                    else { dbPointsString = pendingStr; }
+                }
                 
-                toast.style.display = 'block';
-                setTimeout(() => toast.style.display = 'none', 1000);
+                // Clear and refresh
+                pendingScores = [];
+                clearFoulSelection(); 
+                updateUI();
+                refreshHistoryTables();
+            } else {
+                flashToast("Error", data.message || "Submission failed.", "danger");
             }
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerText = "✓ Submit Scores";
         });
     }
+
+    function refreshHistoryTables() {
+        fetch("{% url 'fetch-score-history' match.id %}?corner={{ corner }}")
+        .then(response => {
+            let serverSubRound = parseInt(response.headers.get('X-Current-Sub-Round'));
+            if (!isNaN(serverSubRound) && serverSubRound !== currentActiveSubRound) {
+                window.location.reload(); 
+            }
+            return response.text();
+        })
+        .then(html => { document.getElementById('score-history-tbody').innerHTML = html; });
+
+        fetch("{% url 'fetch-foul-history' match.id %}?corner={{ corner }}")
+        .then(response => response.text())
+        .then(html => { document.getElementById('foul-history-tbody').innerHTML = html; });
+    }
+
+    function flashToast(type, message, bsClass) {
+        const toast = document.getElementById('feedback-toast');
+        toast.className = `alert alert-${bsClass} fw-bold px-5 py-3 shadow-lg rounded-pill`;
+        toast.innerHTML = (bsClass === 'warning' ? '<img src="https://img.icons8.com/emoji/48/warning-emoji.png" alt="warning icon" class="me-2" style="width: 25px;"/> ' : '') + message;
+        toast.style.display = 'block';
+        setTimeout(() => toast.style.display = 'none', 1500);
+    }
+
+    // Initialize UI on load
+    updateUI();
+    setInterval(refreshHistoryTables, 5000);
+    refreshHistoryTables();
+
 </script>
 
 </body>
