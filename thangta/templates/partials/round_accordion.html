@@ -1,0 +1,123 @@
+<div class="accordion" id="roundsAccordion">
+    {% for rs in round_summary %}
+    <div class="accordion-item mb-3 border-0 shadow-sm rounded overflow-hidden" style="border-left: 5px solid {% if rs.status == 'Completed' %}#10b981{% else %}#34d399{% endif %} !important;">
+        
+        <h2 class="accordion-header m-0">
+            <button class="accordion-button {% if rs.round != active_tab %}collapsed{% endif %} py-3 px-4 bg-light shadow-none" type="button" onclick="setActiveTab('{{ rs.round }}')">
+                <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                    
+                    <div class="d-flex align-items-center gap-3">
+                        {% if rs.status == 'Completed' %}
+                            <div class="bg-success text-white rounded p-1 d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 26px; height: 26px;">✓</div>
+                        {% else %}
+                            <div class="bg-success rounded-circle shadow-sm" style="width: 18px; height: 18px; opacity: 0.8; margin-left: 4px;"></div>
+                        {% endif %}
+                        <div class="text-start">
+                            <h5 class="mb-0 fw-bold text-dark">Round {{ rs.round }}</h5>
+                            <small class="text-muted">{{ rs.status }}</small>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-5 text-center align-items-center">
+                        <div>
+                            <h3 class="mb-0 fw-bold text-danger">{{ rs.red_total }}</h3>
+                            <small class="text-danger fw-bold text-uppercase" style="font-size: 0.75rem;">RED <span class="text-muted text-lowercase fw-normal">({{ rs.red_scorer }})</span></small>
+                        </div>
+                        {% if match.participant_blue %}
+                        <div>
+                            <h3 class="mb-0 fw-bold text-primary">{{ rs.blue_total }}</h3>
+                            <small class="text-primary fw-bold text-uppercase" style="font-size: 0.75rem;">BLUE <span class="text-muted text-lowercase fw-normal">({{ rs.blue_scorer }})</span></small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </button>
+        </h2>
+        
+        <div class="{% if rs.round == active_tab %}d-block{% else %}d-none{% endif %}">
+            <div class="accordion-body p-0 border-top border-dark border-2">
+                <div class="row g-0 h-100">
+                    
+                    <div class="col-6 border-end border-2 border-dark">
+                        <table class="table table-hover m-0 align-middle">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2 ps-3">ACTION</th>
+                                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">SCORER</th>
+                                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2 text-end pe-3">OVERRIDE</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white">
+                                {% for score in rs.red_history %}
+                                <tr class="{% if score.is_flagged %}flagged-row{% endif %}">
+                                    <td class="align-middle ps-3">
+                                        {% if score.is_foul %}
+                                            <span class="badge bg-danger py-1 px-2">{{ score.foul_reason }} (-3)</span>
+                                        {% elif score.points == 0 %}
+                                            <span class="badge bg-secondary py-1 px-2">Done (0)</span>
+                                        {% else %}
+                                            <span class="badge bg-success py-1 px-2">+{{ score.points }} PT</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="align-middle text-uppercase" style="color: #000000 !important; font-weight: 900 !important;">
+                                        {{ score.scorer.username|default:"Unknown" }}
+                                    </td>
+                                    <td class="text-end align-middle pe-3">
+                                        <button class="btn btn-sm btn-outline-danger fw-bold shadow-sm" onclick="toggleFlag({{ score.id }})">
+                                            {% if score.is_flagged %}⟲ Unflag{% else %}🚩 Flag{% endif %}
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4 fst-italic">Waiting for Red Corner...</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="col-6">
+                        <table class="table table-hover m-0 align-middle">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2 ps-3">ACTION</th>
+                                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">SCORER</th>
+                                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2 text-end pe-3">OVERRIDE</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white">
+                                {% for score in rs.blue_history %}
+                                <tr class="{% if score.is_flagged %}flagged-row{% endif %}">
+                                    <td class="align-middle ps-3">
+                                        {% if score.is_foul %}
+                                            <span class="badge bg-danger py-1 px-2">{{ score.foul_reason }} (-3)</span>
+                                        {% elif score.points == 0 %}
+                                            <span class="badge bg-secondary py-1 px-2">Done (0)</span>
+                                        {% else %}
+                                            <span class="badge bg-success py-1 px-2">+{{ score.points }} PT</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="align-middle text-uppercase" style="color: #000000 !important; font-weight: 900 !important;">
+                                        {{ score.scorer.username|default:"Unknown" }}
+                                    </td>
+                                    <td class="text-end align-middle pe-3">
+                                        <button class="btn btn-sm btn-outline-danger fw-bold shadow-sm" onclick="toggleFlag({{ score.id }})">
+                                            {% if score.is_flagged %}⟲ Unflag{% else %}🚩 Flag{% endif %}
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4 fst-italic">Waiting for Blue Corner...</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>

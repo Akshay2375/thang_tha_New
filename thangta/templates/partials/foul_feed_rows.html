@@ -1,0 +1,67 @@
+<div class="row g-0 h-100">
+    <div class="col-6 border-end border-2 border-dark">
+        <table class="table table-hover m-0 align-middle">
+            <thead class="bg-light" style="position: sticky; top: 0; z-index: 1;">
+                <tr>
+                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2 ps-3">RND</th>
+                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">FOUL</th>
+                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">SCORER</th>
+                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2 text-end pe-3">OVERRIDE</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white">
+                {% for foul in red_fouls %}
+                <tr class="{% if foul.is_flagged %}flagged-row{% endif %}">
+                    <td class="fw-bold align-middle text-dark ps-3">{{ foul.round_num }}</td>
+                    <td class="align-middle">
+                        <span class="badge bg-danger py-1 px-2">{{ foul.foul_reason }} (-3)</span>
+                    </td>
+                    <td class="align-middle text-uppercase" style="color: #000000 !important; font-weight: 900 !important;">
+                        {{ foul.scorer.username|default:"Unknown" }}
+                    </td>
+                    <td class="text-end align-middle pe-3">
+                        <button class="btn btn-sm btn-outline-danger fw-bold shadow-sm" onclick="toggleFlag({{ foul.id }})">
+                            {% if foul.is_flagged %}⟲ Unflag{% else %}🚩 Flag{% endif %}
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center text-muted py-3 fst-italic">No fouls recorded.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="col-6">
+        <table class="table table-hover m-0 align-middle">
+            <thead class="bg-light" style="position: sticky; top: 0; z-index: 1;">
+                <tr>
+                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2 ps-3">RND</th>
+                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">FOUL</th>
+                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">SCORER</th>
+                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2 text-end pe-3">OVERRIDE</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white">
+                {% for foul in blue_fouls %}
+                <tr class="{% if foul.is_flagged %}flagged-row{% endif %}">
+                    <td class="fw-bold align-middle text-dark ps-3">{{ foul.round_num }}</td>
+                    <td class="align-middle">
+                        <span class="badge bg-danger py-1 px-2">{{ foul.foul_reason }} (-3)</span>
+                    </td>
+                    <td class="align-middle text-uppercase" style="color: #000000 !important; font-weight: 900 !important;">
+                        {{ foul.scorer.username|default:"Unknown" }}
+                    </td>
+                    <td class="text-end align-middle pe-3">
+                        <button class="btn btn-sm btn-outline-danger fw-bold shadow-sm" onclick="toggleFlag({{ foul.id }})">
+                            {% if foul.is_flagged %}⟲ Unflag{% else %}🚩 Flag{% endif %}
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center text-muted py-3 fst-italic">No fouls recorded.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

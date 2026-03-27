@@ -154,11 +154,9 @@
                                             <span class="badge bg-light text-dark border p-2 mb-2 w-100">Waiting to Start</span>
                                             
                                             {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
-                                                <form action="{% url 'start-match' match.id %}" method="POST" class="m-0">
-                                                    {% csrf_token %}
-                                                    <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm">Start Match</button>
-                                                </form>
+                                                <a href="{% url 'start-match' match.id %}" class="btn btn-success w-100 fw-bold shadow-sm">Start Match</a>
                                             {% endif %}
+
                                         {% endif %}
                                     </div>
                                 </div>

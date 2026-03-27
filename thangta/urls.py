@@ -41,7 +41,10 @@ urlpatterns = [
     # path('route-dashboard/', dashboard_dispatcher, name='dashboard-dispatcher'),
     path('judge/match/<int:match_id>/api/live-data/', match_live_data, name='match-live-data'),
     
+    path('judge/match/<int:match_id>/start-round/<int:round_num>/', advance_match_round, name='advance-match-round'),
+    
     path('judge/score/<int:score_id>/flag/', toggle_score_flag, name='toggle-score-flag'),
+    path('judge/match/<int:match_id>/advance-sub-round/', advance_sub_round, name='advance-sub-round'),
     
     path('tournament/<int:tournament_id>/fixtures/manage/', manage_fixtures, name='manage-fixtures'),
     path('judge/tournament/<int:tournament_id>/ring/<int:ring_number>/generate/', judge_generate_fixtures, name='judge-generate-fixtures'),

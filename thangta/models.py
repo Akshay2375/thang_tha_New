@@ -135,6 +135,9 @@ class Match(models.Model):
     
     # 3. Progression Tracking
     round_number = models.IntegerField(default=1)
+    current_round = models.IntegerField(default=1) # Tracks Round 1, Round 2, or 3 (Tie Breaker)
+    # Add this inside your Match class
+    current_sub_round = models.IntegerField(default=1)
     match_sequence = models.IntegerField(help_text="Order of the match in this round")
     current_sub_round = models.IntegerField(default=1)
     
@@ -149,12 +152,22 @@ class Match(models.Model):
     winner = models.ForeignKey(Participant, related_name='matches_won', on_delete=models.SET_NULL, null=True, blank=True)
     
     @property
-    def full_category_name(self):
-        """Creates a clean string for the results grouping using raw fields"""
-        event = self.event_type.replace('_', ' ').title()
-        gender_title = self.gender.title()
-        return f"{event} | {gender_title} | {self.age_category} | {self.weight_category}"
+    def age_display(self):
+        """Safely translates the short code to the full age name."""
+        age_map = {'U14': 'Under 14', 'U18': 'Under 18', 'O18': 'Over 18'}
+        return age_map.get(self.age_category, self.age_category)
 
+    @property
+    def weight_display(self):
+        """Safely ensures Kg is added to the weight."""
+        if self.weight_category and "Kg" not in str(self.weight_category):
+            return f"{self.weight_category} Kg"
+        return self.weight_category
+
+    @property
+    def full_category_name(self):
+        """Combines them all for the Match Cards."""
+        return f"{self.event_type} | {self.gender} | {self.age_display} | {self.weight_display}"    
     def __str__(self):
         blue_name = self.participant_blue.name if self.participant_blue else "BYE"
         return f"Round {self.round_number} | Ring {self.ring_number} | {self.participant_red.name} (RED) vs {blue_name} (BLUE)"
@@ -171,6 +184,7 @@ class Score(models.Model):
     points = models.IntegerField(default=1)
     
     # Fields for Judge Control
+    round_num = models.IntegerField(default=1) # Tracks if this score was in Round 1, 2, or 3
     sub_round = models.IntegerField(default=1) 
     is_foul = models.BooleanField(default=False)
     foul_reason = models.CharField(max_length=255, blank=True, null=True)

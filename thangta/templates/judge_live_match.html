@@ -6,122 +6,129 @@
     <title>LIVE: Ring {{ match.ring_number }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .score-box { font-size: 5rem; font-weight: 900; line-height: 1; }
-        .red-panel { background-color: #ffeef0; border: 3px solid #dc3545; }
-        .blue-panel { background-color: #e6f2ff; border: 3px solid #0d6efd; }
-        /* Style for the scrolling event feed */
-        .feed-container { max-height: 300px; overflow-y: auto; background-color: #2b3035; border: 1px solid #495057; border-radius: 8px; }
+        body { background-color: #1a1d20; }
+        .score-box { font-size: 7rem; font-weight: 900; line-height: 1; margin-top: 1rem; }
+        .red-panel { background-color: #ffeef0; border: 4px solid #dc3545; }
+        .blue-panel { background-color: #e6f2ff; border: 4px solid #0d6efd; }
+        .feed-container { max-height: 350px; overflow-y: auto; border: 1px solid #495057; }
         .flagged-row { opacity: 0.5; text-decoration: line-through; }
     </style>
 </head>
-<body class="bg-dark text-white p-3 d-flex flex-column" style="min-height: 100vh;">
+<body class="text-white p-4 d-flex flex-column" style="min-height: 100vh;">
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <a href="{% url 'judge-ring-matches' match.tournament.id match.ring_number %}" class="btn btn-outline-light btn-sm">← Back to Queue</a>
+    <a href="{% url 'judge-ring-matches' match.tournament.id match.ring_number %}" class="btn btn-outline-light">← Back to Queue</a>
+    
     <div class="text-center">
-        <h4 class="m-0 text-warning fw-bold">🔴 LIVE - RING {{ match.ring_number }}</h4>
-        <span class="small text-light opacity-75">{{ match.full_category_name }}</span>
+        <h3 class="m-0 text-warning fw-bold">🔴 LIVE - RING {{ match.ring_number }}</h3>
+        <span class="text-light opacity-75 fs-5">{{ match.full_category_name }}</span>
     </div>
     
-    <div class="bg-secondary bg-opacity-50 px-3 py-1 rounded border border-secondary text-center">
-        <span class="small text-uppercase fw-bold text-light opacity-75">Sub-Round</span>
-        <h4 class="m-0 fw-bold">{{ match.current_sub_round }}</h4>
+    <div class="bg-secondary bg-opacity-50 px-4 py-1 rounded border border-secondary text-center">
+        <span class="small text-uppercase fw-bold text-light opacity-75 lh-1" style="font-size: 0.7rem;">ROUND</span>
+        <h4 class="m-0 fw-bold">{{ match.current_round|default:"1" }}</h4>
     </div>
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-6 d-flex flex-column">
-        <div class="red-panel rounded flex-grow-1 d-flex flex-column justify-content-center align-items-center text-danger p-3 shadow">
-            <h3 class="fw-bold text-center text-uppercase mb-1">{{ match.participant_red.name }}</h3>
-            <p class="small text-dark fw-bold mb-2">{{ match.participant_red.district }}</p>
+<div class="row g-4 mb-4">
+    <div class="col-6">
+        <div class="red-panel rounded d-flex flex-column justify-content-center align-items-center text-danger p-3 shadow">
+            <h2 class="fw-bold text-center text-uppercase mb-1" style="font-size: 2rem;">{{ match.participant_red.name }}</h2>
+            <h5 class="text-dark fw-bold m-0">{{ match.participant_red.district|default:"No City" }}</h5>
             <div class="score-box" id="red-score">{{ red_score }}</div>
         </div>
     </div>
-    <div class="col-6 d-flex flex-column">
-        <div class="blue-panel rounded flex-grow-1 d-flex flex-column justify-content-center align-items-center text-primary p-3 shadow">
+    <div class="col-6">
+        <div class="blue-panel rounded d-flex flex-column justify-content-center align-items-center text-primary p-3 shadow">
             {% if match.participant_blue %}
-                <h3 class="fw-bold text-center text-uppercase mb-1">{{ match.participant_blue.name }}</h3>
-                <p class="small text-dark fw-bold mb-2">{{ match.participant_blue.district }}</p>
+                <h2 class="fw-bold text-center text-uppercase mb-1" style="font-size: 2rem;">{{ match.participant_blue.name }}</h2>
+                <h5 class="text-dark fw-bold m-0">{{ match.participant_blue.district|default:"No City" }}</h5>
                 <div class="score-box" id="blue-score">{{ blue_score }}</div>
             {% else %}
-                <h3 class="fw-bold text-center fst-italic mb-1">BYE</h3>
+                <h2 class="fw-bold text-center fst-italic mb-1" style="font-size: 2rem;">BYE</h2>
                 <div class="score-box text-muted">-</div>
             {% endif %}
         </div>
     </div>
 </div>
 
-<h5 class="fw-bold text-light mb-2 px-1">📊 Live Scorer Feed</h5>
-<div class="feed-container mb-4">
-    <table class="table table-hover m-0 align-middle">
-        <thead class="bg-white" style="position: sticky; top: 0; z-index: 1;">
-            <tr>
-                <th class="small py-2 text-muted">SR</th>
-                <th class="small py-2 text-muted">ACTION</th>
-                <th class="small py-2 text-muted">FIGHTER</th>
-                <th class="small py-2 text-muted">SCORER</th>
-                <th class="small py-2 text-muted text-end">JUDGE OVERRIDE</th>
-            </tr>
-        </thead>
-        <tbody id="score-feed-body" class="bg-white">
-            {% include 'partials/score_feed_rows.html' %}
-        </tbody>
-    </table>
+<div class="d-flex justify-content-center gap-3 mb-4">
+    {% if match.current_round < 2 %}
+    <form action="{% url 'advance-match-round' match.id 2 %}" method="POST">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning fw-bold px-4 shadow-sm" onclick="return confirm('Start Round 2?');">▶ Start Round 2</button>
+    </form>
+    {% endif %}
+    
+    {% if match.current_round < 3 %}
+    <form action="{% url 'advance-match-round' match.id 3 %}" method="POST">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning fw-bold px-4 shadow-sm" onclick="return confirm('Start Tie Breaker?');">▶ Start Tie Breaker</button>
+    </form>
+    {% endif %}
+</div>
+
+<div id="round-summary-container">
+    <div class="text-center text-muted py-2 fst-italic">Loading round summary...</div>
+</div>
+
+<div id="score-feed-container" class="feed-container mb-4 bg-white rounded shadow-sm">
+    <div class="text-center text-muted py-4 fst-italic">Loading live feed...</div>
+</div>
+
+<h5 class="fw-bold text-danger mb-2 px-1 mt-4">
+    <img src="https://img.icons8.com/color/48/error--v1.png" alt="error" style="width: 24px; margin-right: 5px; vertical-align: text-bottom;"/>
+    Match Foul History
+</h5>
+<div id="foul-feed-container" class="feed-container mb-5 bg-white rounded shadow-sm" style="max-height: 250px;">
+    <div class="text-center text-muted py-4 fst-italic">Loading foul history...</div>
 </div>
 
 <div class="mt-auto text-center pb-2">
-    <a href="{% url 'update-match-winner' match.id %}" class="btn btn-danger btn-lg fw-bold shadow mt-3 py-3 px-5" style="border-radius: 12px; font-size: 1.5rem;">
-    🛑 End Match & Declare Winner
-</a>
+    <a href="{% url 'update-match-winner' match.id %}" class="btn btn-danger btn-lg fw-bold shadow py-3 px-5" style="border-radius: 12px; font-size: 1.5rem;">
+        🛑 End Match & Declare Winner
+    </a>
 </div>
 
-
-
-
-
 <script>
-    function fetchLiveData() {
-        // Ping the hidden URL we just made
+  
+  function fetchLiveData() {
         fetch("{% url 'match-live-data' match.id %}")
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) throw new Error("Backend Error");
+                return response.json();
+            })
             .then(data => {
-                // Instantly update the giant red and blue numbers
-                document.getElementById('red-score').innerText = data.red_score;
+                const rScore = document.getElementById('red-score');
+                if (rScore) rScore.innerText = data.current_red;
                 
-                let blueScoreElement = document.getElementById('blue-score');
-                if (blueScoreElement) {
-                    blueScoreElement.innerText = data.blue_score;
-                }
+                const bScore = document.getElementById('blue-score');
+                if (bScore) bScore.innerText = data.current_blue;
+
+                const summaryContainer = document.getElementById('round-summary-container');
+                if (summaryContainer) summaryContainer.innerHTML = data.summary_html;
                 
-                // Instantly replace all the rows in the table with the fresh data
-                document.getElementById('score-feed-body').innerHTML = data.feed_html;
+                const feedContainer = document.getElementById('score-feed-container');
+                if (feedContainer) feedContainer.innerHTML = data.feed_html;
+                
+                // NEW: Inject the Foul Table
+                const foulContainer = document.getElementById('foul-feed-container');
+                if (foulContainer) foulContainer.innerHTML = data.foul_html;
             })
             .catch(error => console.error('Error fetching live data:', error));
     }
+  function toggleFlag(scoreId) {
+        fetch(`/judge/score/${scoreId}/flag/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => { if (data.status === 'success') { fetchLiveData(); } })
+        .catch(error => console.error('Error:', error));
+    }
 
-    // Add this inside the <script> tag in judge_live_match.html
-
-function toggleFlag(scoreId) {
-    // Ping the hidden flag URL
-    fetch(`/judge/score/${scoreId}/flag/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': '{{ csrf_token }}', // Security token required by Django
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            // Force an immediate refresh of the scoreboard so it feels instant!
-            fetchLiveData(); 
-        }
-    })
-    .catch(error => console.error('Error flagging score:', error));
-}
-    setInterval(fetchLiveData, 1500);
+    fetchLiveData();
+    setInterval(fetchLiveData, 500); 
 </script>
-
 </body>
 </html>
-

@@ -7,10 +7,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body, html { height: 100%; overflow: auto; background-color: #f0f4f8; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;}
-        
         .page-container { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
         .scoring-card { background: white; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); padding: 2.5rem; margin-bottom: 2rem; border: none; }
-        
         .main-header { display: flex; align-items: center; justify-content: center; margin-bottom: 2.5rem; }
         .main-header h1 { font-size: 2.5rem; font-weight: bold; color: #4338ca; margin-left: 1rem;}
         
@@ -23,7 +21,7 @@
 
         .control-bar { background-color: #fffbeb; border-radius: 10px; border: 1px solid #fef3c7; padding: 1rem; margin-bottom: 2rem; text-align: center; }
         .control-bar label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; color: #78350f; display: block; margin-bottom: 0.3rem;}
-        .corner-label { font-size: 1.2rem; display: block; margin-top: 0.5rem;}
+        .corner-label { font-size: 1.5rem; display: block; margin-top: 0.5rem;} 
         
         .section-title { font-size: 1.4rem; font-weight: bold; color: #1e293b; margin-bottom: 1.5rem;}
         .score-row { display: flex; justify-content: center; gap: 1.5rem; align-items: center; }
@@ -54,13 +52,6 @@
         
         .submit-btn { background-color: #16a34a; color: white; font-weight: bold; font-size: 1.1rem; padding: 1rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);}
 
-        .history-card { background: white; border-radius: 20px; padding: 2.5rem; margin-bottom: 2rem; }
-        .history-card h3 { font-size: 1.4rem; font-weight: bold; color: #1e293b; margin-bottom: 1.5rem;}
-        .history-card table { font-size: 0.9rem;}
-        .history-card table thead { background-color: #f1f5f9; color: #475569;}
-        .score-table thead { background-color: #0d6efd; color: white;}
-        .foul-table thead { background-color: #dc3545; color: white;}
-        
         #feedback-toast { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2000; display: none; font-size: 1.5rem; border-radius: 50px; }
     </style>
 </head>
@@ -94,13 +85,19 @@
         {% endif %}
         
         <div class="control-bar row g-0">
-            <div class="col-6 px-2">
+            <div class="col-4 px-2">
+                <label>Round</label>
+                <div class="corner-label fw-bold text-primary border border-primary rounded bg-white py-1 shadow-sm">
+                    {{ match.current_round|default:"1" }}
+                </div>
+            </div>
+            <div class="col-4 px-2">
                 <label>Sub-round</label>
-                <div class="corner-label fw-bold text-dark border rounded bg-white py-1 shadow-sm">
+                <div id="current-sub-round-display" class="corner-label fw-bold text-dark border rounded bg-white py-1 shadow-sm">
                     {{ current_sub_round }}
                 </div>
             </div>
-            <div class="col-6 px-2">
+            <div class="col-4 px-2">
                 <label>Your Corner</label>
                 {% if corner == 'red' %}
                     <span class="corner-label fw-bold text-danger">RED</span>
@@ -157,27 +154,6 @@
                 </button>
             {% endif %}
         </div>
-
-    </div>
-
-    <div class="history-card">
-        <h3><img src="https://img.icons8.com/fluency-system-filled/48/1e293b/scorecard.png" alt="score history icon" class="me-2" style="width: 20px;"/> Score History</h3>
-        <table class="table table-bordered score-table">
-            <thead><tr><th>Sub-round</th><th>Score</th><th>Time</th></tr></thead>
-            <tbody id="score-history-tbody">
-                <tr><td colspan="3" class="text-center text-muted">Loading history...</td></tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="history-card">
-        <h3><img src="https://img.icons8.com/material-outlined/48/dc3545/error.png" alt="foul history icon" class="me-2" style="width: 20px;"/> Foul History</h3>
-        <table class="table table-bordered foul-table">
-            <thead><tr><th>Sub-round</th><th>Type</th><th>Time</th></tr></thead>
-            <tbody id="foul-history-tbody">
-                <tr><td colspan="3" class="text-center text-muted">Loading history...</td></tr>
-            </tbody>
-        </table>
     </div>
 
     <div class="text-center mb-5 pb-5">
@@ -188,55 +164,50 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // Database State
-    let dbPointsString = "{{ points_string|escapejs }}";
-    let dbTotalScore = parseInt("{{ total_score }}") || 0;
+    // Variables for the visual UI logic
+    let dbPointsString = "";
+    let dbTotalScore = 0;
+    let dbScoreCount = 0;
     
-    // NEW: Track the number of entries!
-    let dbScoreCount = parseInt("{{ db_score_count }}") || 0;
-    
-    // Local Pending State
     let pendingScores = [];
     let selectedFoulType = null;
-    let currentActiveSubRound = parseInt("{{ current_sub_round }}");
+    let currentActiveSubRound = parseInt("{{ current_sub_round }}") || 1;
+    let currentActiveRound = parseInt("{{ match.current_round|default:'1' }}");
 
-    // Master UI Updater
     function updateUI() {
         if (selectedFoulType) {
             document.getElementById('ui-sequence').innerText = 'FOUL';
             document.getElementById('ui-sequence').className = 'text-danger fw-bold';
-            document.getElementById('ui-total').innerText = dbTotalScore + " (-3)";
-            
+            document.getElementById('ui-total').innerText = "-3";
             document.getElementById('btn-point-1').disabled = false;
             document.getElementById('btn-point-2').disabled = false;
             return;
         }
 
-        // Calculate math sum
         let total = dbTotalScore + pendingScores.reduce((a, b) => a + b, 0);
-
-        // Build display string
         let sequenceStr = dbPointsString;
+        
         if (pendingScores.length > 0) {
             let pendingStr = pendingScores.join(' + ');
-            if (sequenceStr !== "") {
-                sequenceStr += " + " + pendingStr;
-            } else {
-                sequenceStr = pendingStr;
-            }
+            if (sequenceStr !== "") { sequenceStr += " + " + pendingStr; } 
+            else { sequenceStr = pendingStr; }
         }
 
         document.getElementById('ui-sequence').innerText = sequenceStr === "" ? "—" : sequenceStr;
         document.getElementById('ui-sequence').className = sequenceStr === "" ? "" : 'text-danger fw-bold';
         document.getElementById('ui-total').innerText = total;
 
-        // NEW RULE: Disable buttons if they hit 3 ENTRIES total
+        // Lock at 3 entries
         let totalEntries = dbScoreCount + pendingScores.length;
         document.getElementById('btn-point-1').disabled = (totalEntries >= 3);
         document.getElementById('btn-point-2').disabled = (totalEntries >= 3);
     }
 
     function prepareScore(points) {
+        if (dbScoreCount + pendingScores.length >= 3) {
+            flashToast("Warning", "Max 3 entries allowed!", "warning");
+            return; 
+        }
         clearFoulSelection();
         pendingScores.push(points);
         updateUI();
@@ -265,16 +236,10 @@
     }
 
     function submitScores(participantId) {
-        if (pendingScores.length === 0 && selectedFoulType === null) {
-            flashToast("Error", "Please select points or a foul first.", "danger");
-            return;
-        }
-
         const formData = new FormData();
         formData.append('participant_id', participantId);
         formData.append('is_foul', selectedFoulType !== null);
         formData.append('foul_reason', selectedFoulType || '');
-        
         formData.append('points', pendingScores.join(','));
         formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
@@ -289,28 +254,26 @@
         .then(response => response.json())
         .then(data => {
             if(data.status === 'success') {
-                if (selectedFoulType !== null) {
-                    flashToast("Success", "✓ Foul registered!", "warning");
-                } else {
-                    flashToast("Success", "✓ Combo submitted!", "success");
-                    
-                    // Update internal Database state locally
-                    let incomingTotal = pendingScores.reduce((a, b) => a + b, 0);
-                    dbTotalScore += incomingTotal;
-                    dbScoreCount += pendingScores.length; // Update the ENTRY count!
-                    
-                    let pendingStr = pendingScores.join(' + ');
-                    if (dbPointsString !== "") { dbPointsString += " + " + pendingStr; } 
-                    else { dbPointsString = pendingStr; }
-                }
+                flashToast("Success", "✓ Sub-round submitted!", "success");
                 
-                // Clear and refresh
+                // AUTO-INCREMENT Sub-Round locally
+                currentActiveSubRound++; 
+                document.getElementById('current-sub-round-display').innerText = currentActiveSubRound;
+                
+                // Clear the board for the NEW round!
                 pendingScores = [];
+                dbPointsString = "";
+                dbTotalScore = 0;
+                dbScoreCount = 0;
+                
                 clearFoulSelection(); 
                 updateUI();
-                refreshHistoryTables();
+                syncMatchState(); // Just ping the backend to verify state
             } else {
                 flashToast("Error", data.message || "Submission failed.", "danger");
+                pendingScores = [];
+                clearFoulSelection();
+                updateUI();
             }
         })
         .finally(() => {
@@ -319,20 +282,27 @@
         });
     }
 
-    function refreshHistoryTables() {
+    // Renamed from refreshHistoryTables to syncMatchState
+    function syncMatchState() {
         fetch("{% url 'fetch-score-history' match.id %}?corner={{ corner }}")
         .then(response => {
+            // 1. MAIN ROUND CHECK (Triggers alert if Judge advanced the match)
+            let serverRound = parseInt(response.headers.get('X-Current-Round'));
+            if (!isNaN(serverRound) && serverRound > currentActiveRound) {
+                let roundName = (serverRound === 3) ? "the TIE BREAKER" : "ROUND " + serverRound;
+                alert("🔔 ATTENTION SCORER: The Judge has officially started " + roundName + "!");
+                window.location.reload(); 
+                return;
+            }
+
+            // 2. SUB-ROUND CHECK (Ensures scorer stays synced)
             let serverSubRound = parseInt(response.headers.get('X-Current-Sub-Round'));
             if (!isNaN(serverSubRound) && serverSubRound !== currentActiveSubRound) {
                 window.location.reload(); 
+                return;
             }
-            return response.text();
         })
-        .then(html => { document.getElementById('score-history-tbody').innerHTML = html; });
-
-        fetch("{% url 'fetch-foul-history' match.id %}?corner={{ corner }}")
-        .then(response => response.text())
-        .then(html => { document.getElementById('foul-history-tbody').innerHTML = html; });
+        .catch(error => console.log("Background sync error:", error));
     }
 
     function flashToast(type, message, bsClass) {
@@ -345,8 +315,9 @@
 
     // Initialize UI on load
     updateUI();
-    setInterval(refreshHistoryTables, 5000);
-    refreshHistoryTables();
+    
+    // Background ping every 5 seconds just to listen for the Judge's round change
+    setInterval(syncMatchState, 5000);
 
 </script>
 

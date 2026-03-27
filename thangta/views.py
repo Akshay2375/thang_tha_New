@@ -357,6 +357,7 @@ def judge_live_match(request, match_id):
     match = get_object_or_404(Match, id=match_id)
     score_feed = match.scores.all()
     valid_scores = score_feed.filter(is_flagged=False, is_foul=False)
+    # sub_round=
     
     red_score = valid_scores.filter(participant=match.participant_red).aggregate(Sum('points'))['points__sum'] or 0
     blue_score = 0
@@ -372,25 +373,136 @@ def judge_live_match(request, match_id):
 # 7. REAL-TIME APIs (AJAX)
 # ==========================================
 
+
+
+from django.template.loader import render_to_string
+from django.db.models import Sum
+from django.http import JsonResponse
+from django.shortcuts import redirect
+
+import math
+from django.db.models import Sum
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
+
+def calculate_round_score(match, participant, round_num):
+    """Calculates the final score for ONE specific round in perfect isolation."""
+    if not participant:
+        return 0
+        
+    scores_query = Score.objects.filter(match=match, participant=participant, round_num=round_num, is_flagged=False)
+        
+    point_scores = scores_query.filter(is_foul=False).order_by('timestamp').values_list('points', flat=True)
+    fouls = scores_query.filter(is_foul=True).aggregate(Sum('points'))['points__sum'] or 0
+
+    round_score = 0
+    points_list = list(point_scores)
+    
+    # Process strictly within this round's boundaries
+    for i in range(0, len(points_list), 3):
+        chunk = points_list[i:i+3]
+        if len(chunk) == 3:
+            round_score += math.floor(sum(chunk) / 3.0)
+            
+    return round_score + fouls
+
+from django.template.loader import render_to_string
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+
 @judge_required
 def match_live_data(request, match_id):
-    """API endpoint that returns the latest scores and HTML for the event feed."""
     match = get_object_or_404(Match, id=match_id)
     
-    score_feed = match.scores.all()
-    valid_scores = score_feed.filter(is_flagged=False, is_foul=False)
+    current_red = calculate_round_score(match, match.participant_red, match.current_round)
+    current_blue = calculate_round_score(match, match.participant_blue, match.current_round)
     
-    red_score = valid_scores.filter(participant=match.participant_red).aggregate(Sum('points'))['points__sum'] or 0
-    blue_score = 0
-    if match.participant_blue:
-        blue_score = valid_scores.filter(participant=match.participant_blue).aggregate(Sum('points'))['points__sum'] or 0
-
+    round_summary = []
+    for r in range(1, match.current_round + 1):
+        r_red = calculate_round_score(match, match.participant_red, r)
+        r_blue = calculate_round_score(match, match.participant_blue, r) if match.participant_blue else 0
+        round_summary.append({
+            'round': r,
+            'status': 'In Progress' if r == match.current_round else 'Completed',
+            'red_total': r_red,
+            'blue_total': r_blue,
+        })
+        
+    summary_html = render_to_string('partials/round_summary_cards.html', {
+        'round_summary': round_summary,
+        'match': match
+    }, request=request)
+    
+    red_history = Score.objects.filter(match=match, participant=match.participant_red, round_num=match.current_round).order_by('-timestamp')
+    blue_history = Score.objects.filter(match=match, participant=match.participant_blue, round_num=match.current_round).order_by('-timestamp') if match.participant_blue else []
+    
+    red_fouls = Score.objects.filter(match=match, participant=match.participant_red, is_foul=True).order_by('-timestamp')
+    blue_fouls = Score.objects.filter(match=match, participant=match.participant_blue, is_foul=True).order_by('-timestamp') if match.participant_blue else []
+    
+    foul_html = render_to_string('partials/foul_feed_rows.html', {
+        'red_fouls': red_fouls,
+        'blue_fouls': blue_fouls,
+        'match': match
+    }, request=request)
+    
     feed_html = render_to_string('partials/score_feed_rows.html', {
-        'score_feed': score_feed, 'match': match
+        'red_scores': red_history,
+        'blue_scores': blue_history,
+        'match': match
+    }, request=request)
+        
+    return JsonResponse({
+        'current_red': current_red,
+        'current_blue': current_blue,
+        'summary_html': summary_html,
+        'foul_html': foul_html,
+        'feed_html': feed_html,
     })
+    
+@judge_required
+@require_POST
+def advance_match_round(request, match_id, round_num):
+    """Updates the match to Round 2 or Tie Breaker."""
+    match = get_object_or_404(Match, id=match_id)
+    match.current_round = round_num
+    match.save()
+    return redirect('judge-live-match', match_id=match.id)
 
-    return JsonResponse({'red_score': red_score, 'blue_score': blue_score, 'feed_html': feed_html})
 
+from .permissions import scorer_required
+
+
+@scorer_required
+@require_POST
+def submit_score(request, match_id):
+    """Saves the score and locks it to the CURRENT round."""
+    match = get_object_or_404(Match, id=match_id)
+    participant = get_object_or_404(Participant, id=request.POST.get('participant_id'))
+    is_foul = request.POST.get('is_foul') == 'true'
+    
+    # This automatically resets to 1 if the Judge changed the match.current_round!
+    current_sub_round = Score.objects.filter(match=match, participant=participant, round_num=match.current_round).count() + 1
+    
+    if is_foul:
+        Score.objects.create(
+            match=match, participant=participant, scorer=request.user,
+            points=-3, is_foul=True, foul_reason=request.POST.get('foul_reason', ''), 
+            sub_round=current_sub_round, round_num=match.current_round
+        )
+    else:
+        # Save every point in the combo as a separate entry
+        points_str = request.POST.get('points', '')
+        if points_str:
+            for pt in points_str.split(','):
+                if pt.strip().isdigit():
+                    Score.objects.create(
+                        match=match, participant=participant, scorer=request.user,
+                        points=int(pt.strip()), is_foul=False, 
+                        sub_round=current_sub_round, round_num=match.current_round
+                    )
+            
+    return JsonResponse({'status': 'success'})
 @judge_required
 @require_POST
 def toggle_score_flag(request, score_id):
@@ -561,102 +673,26 @@ def scorer_panel(request, match_id):
         'db_score_count': db_score_count, # Pass the count to the frontend!
     })
 
-@scorer_required
-@require_POST
-def submit_score(request, match_id):
-    """AJAX endpoint to receive and save a score/foul."""
-    match = get_object_or_404(Match, id=match_id)
-    
-    participant_id = request.POST.get('participant_id')
-    is_foul = request.POST.get('is_foul') == 'true'
-    foul_reason = request.POST.get('foul_reason', '')
 
-    participant = get_object_or_404(Participant, id=participant_id)
-    current_sub_round = getattr(match, 'current_sub_round', 1)
+from django.http import HttpResponse
 
-    if is_foul:
-        Score.objects.create(
-            match=match, participant=participant, scorer=request.user,
-            points=-3, is_foul=True, foul_reason=foul_reason, sub_round=current_sub_round 
-        )
-    else:
-        points_str = request.POST.get('points', '')
-        if points_str:
-            
-            incoming_points = []
-            for p_str in points_str.split(','):
-                try:
-                    p = int(p_str.strip())
-                    if p > 0:
-                        incoming_points.append(p)
-                except ValueError:
-                    pass
-            
-            # NEW: Check how many ENTRIES they already have, not the sum of points!
-            existing_count = Score.objects.filter(
-                match=match, participant=participant, is_flagged=False, is_foul=False, sub_round=current_sub_round
-            ).count()
-            
-            if existing_count + len(incoming_points) > 3:
-                return JsonResponse({'status': 'error', 'message': f'Max 3 score entries allowed per sub-round.'})
-            
-            for p in incoming_points:
-                Score.objects.create(
-                    match=match, participant=participant, scorer=request.user,
-                    points=p, is_foul=False, sub_round=current_sub_round 
-                )
-    
-    return JsonResponse({'status': 'success'})
-
-@scorer_required
-@require_POST
-def submit_score(request, match_id):
-    """AJAX endpoint to receive and save a score/foul."""
-    match = get_object_or_404(Match, id=match_id)
-    
-    participant_id = request.POST.get('participant_id')
-    is_foul = request.POST.get('is_foul') == 'true'
-    foul_reason = request.POST.get('foul_reason', '')
-
-    participant = get_object_or_404(Participant, id=participant_id)
-    current_sub_round = getattr(match, 'current_sub_round', 1)
-
-    if is_foul:
-        # Save a single foul
-        Score.objects.create(
-            match=match, participant=participant, scorer=request.user,
-            points=-3, is_foul=True, foul_reason=foul_reason, sub_round=current_sub_round 
-        )
-    else:
-        # Save multiple points sent as a combo string (e.g., "1,2,1")
-        points_str = request.POST.get('points', '')
-        if points_str:
-            for p_str in points_str.split(','):
-                try:
-                    p = int(p_str.strip())
-                    if p > 0:
-                        Score.objects.create(
-                            match=match, participant=participant, scorer=request.user,
-                            points=p, is_foul=False, sub_round=current_sub_round 
-                        )
-                except ValueError:
-                    continue
-    
-    return JsonResponse({'status': 'success'})
 @scorer_required
 def fetch_score_history(request, match_id):
-    """AJAX endpoint to return the score history table snippet."""
     match = get_object_or_404(Match, id=match_id)
-    
-    # NEW: Only show the history for the corner the scorer is currently sitting at!
-    corner = request.GET.get('corner', 'red')
+    corner = request.GET.get('corner')
     participant = match.participant_red if corner == 'red' else match.participant_blue
     
+    # Grab their history
     scores = Score.objects.filter(match=match, participant=participant, is_foul=False).order_by('-timestamp')
+    html = render_to_string('partials/score_history_table.html', {'scores': scores})
     
-    response = render(request, 'scorer_history_table.html', {'scores': scores})
-    # Attach the sub-round for the auto-refresh check
-    response['X-Current-Sub-Round'] = getattr(match, 'current_sub_round', 1)
+    response = HttpResponse(html)
+    
+    # THE FIX: Broadcast the current Sub-Round AND the current Match Round to the Scorer's Javascript!
+    current_sub_round = Score.objects.filter(match=match, participant=participant).count() + 1
+    response['X-Current-Sub-Round'] = current_sub_round
+    response['X-Current-Round'] = match.current_round  # Broadcast the Round!
+    
     return response
 
 @scorer_required
@@ -673,6 +709,8 @@ def fetch_foul_history(request, match_id):
     return render(request, 'scorer_foul_table.html', {'fouls': fouls})
 @judge_required
 def update_match_winner(request, match_id):
+    
+
     """Manually declares a winner, frees the ring, and auto-generates the next round."""
     match = get_object_or_404(Match, id=match_id)
     
@@ -726,3 +764,41 @@ def update_match_winner(request, match_id):
         blue_score = valid_scores.filter(participant=match.participant_blue).aggregate(Sum('points'))['points__sum'] or 0
     return render(request, 'match_update_score.html', {'match': match,'red_score': red_score,
         'blue_score': blue_score})
+@judge_required
+def start_match(request, match_id):
+    """Shows confirmation screen, then sets match to active and redirects to panel."""
+    match = get_object_or_404(Match, id=match_id)
+
+    if request.method == 'POST':
+        # If they clicked the confirmation button, start the match!
+        match.is_active = True
+        match.save()
+        return redirect('judge-live-match', match_id=match.id)
+
+    # If it's a GET request, just show the confirmation page
+    return render(request, 'judge_start_match.html', {'match': match})
+
+
+
+from django.views.decorators.http import require_POST
+
+@judge_required
+@require_POST
+def advance_sub_round(request, match_id):
+    
+    """Advances the match to the next sub-round and refreshes the page."""
+    match = get_object_or_404(Match, id=match_id)
+    
+    # Increase the sub-round by 1
+    match.current_sub_round += 1
+    match.save()
+    
+    return redirect('judge-live-match', match_id=match.id)
+
+
+ 
+import math
+from django.db.models import Sum
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string

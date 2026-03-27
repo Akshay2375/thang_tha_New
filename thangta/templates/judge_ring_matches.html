@@ -42,12 +42,12 @@
     {% if rounds %}
         {% for round in rounds %}
             <div class="mb-5">
-                <h3 class="round-header shadow-sm">Round {{ round.grouper }}</h3>
+                <h3 class="round-header shadow-sm text-center">Round {{ round.grouper }}</h3>
                 
-                <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+                <div class="d-flex flex-column align-items-center gap-4">
                     {% for match in round.list %}
-                    <div class="col">
-                        <div class="card match-card h-100 {% if match.is_completed %}opacity-75{% endif %}">
+                    
+                        <div class="card match-card w-100 {% if match.is_completed %}opacity-75{% endif %}" style="max-width: 500px;">
                             <div class="card-body text-center p-4 d-flex flex-column">
                                 <p class="text-muted small mb-1">{{ match.full_category_name }}</p>
                                 <h6 class="fw-bold mb-4 text-dark">Ring {{ match.ring_number }} • Match {{ match.match_sequence }}</h6>
@@ -68,17 +68,14 @@
                                     {% elif match.is_active %}
                                         <a href="{% url 'judge-live-match' match.id %}" class="btn btn-warning w-100 fw-bold text-dark shadow-sm">🔴 Go to Live Panel</a>
                                     {% else %}
-                                        <form action="{% url 'start-match' match.id %}" method="POST" class="m-0">
-                                            {% csrf_token %}
-                                            <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm" {% if active_match %}disabled title="Finish current match first"{% endif %}>
-                                                Start Match
-                                            </button>
-                                        </form>
+                                        <a href="{% url 'start-match' match.id %}" class="btn btn-success w-100 fw-bold shadow-sm {% if active_match %}disabled{% endif %}" {% if active_match %}title="Finish current match first" aria-disabled="true"{% endif %}>
+                                            Start Match
+                                        </a>
                                     {% endif %}
                                 </div>
                             </div>
                         </div>
-                    </div>
+                        
                     {% endfor %}
                 </div>
             </div>
