@@ -44,4 +44,4 @@ from .models import Score # Make sure to add Score to your imports at the top!
 
 @admin.register(Score)
 class ScoreAdmin(admin.ModelAdmin):
-    list_display = ('match', 'participant', 'points', 'sub_round', 'is_foul')
+    list_display = ('match', 'participant', 'points',  'is_foul')

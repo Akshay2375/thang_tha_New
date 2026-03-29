@@ -17,7 +17,7 @@
 <body class="text-white p-4 d-flex flex-column" style="min-height: 100vh;">
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <a href="{% url 'judge-ring-matches' match.tournament.id match.ring_number %}" class="btn btn-outline-light">← Back to Queue</a>
+   
     
     <div class="text-center">
         <h3 class="m-0 text-warning fw-bold">🔴 LIVE - RING {{ match.ring_number }}</h3>
@@ -92,18 +92,19 @@
 
 <script>
   
-  function fetchLiveData() {
+ function fetchLiveData() {
         fetch("{% url 'match-live-data' match.id %}")
             .then(response => {
                 if (!response.ok) throw new Error("Backend Error");
                 return response.json();
             })
             .then(data => {
+                // THE FIX: Now using total_red and total_blue for the giant boxes
                 const rScore = document.getElementById('red-score');
-                if (rScore) rScore.innerText = data.current_red;
+                if (rScore) rScore.innerText = data.total_red;
                 
                 const bScore = document.getElementById('blue-score');
-                if (bScore) bScore.innerText = data.current_blue;
+                if (bScore) bScore.innerText = data.total_blue;
 
                 const summaryContainer = document.getElementById('round-summary-container');
                 if (summaryContainer) summaryContainer.innerHTML = data.summary_html;
@@ -111,13 +112,12 @@
                 const feedContainer = document.getElementById('score-feed-container');
                 if (feedContainer) feedContainer.innerHTML = data.feed_html;
                 
-                // NEW: Inject the Foul Table
                 const foulContainer = document.getElementById('foul-feed-container');
                 if (foulContainer) foulContainer.innerHTML = data.foul_html;
             })
             .catch(error => console.error('Error fetching live data:', error));
     }
-  function toggleFlag(scoreId) {
+    function toggleFlag(scoreId) {
         fetch(`/judge/score/${scoreId}/flag/`, {
             method: 'POST',
             headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' }

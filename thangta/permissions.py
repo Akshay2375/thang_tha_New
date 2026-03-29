@@ -25,7 +25,12 @@ class AdminRequiredMixin(AccessMixin):
             return self.handle_no_permission() # Redirects to login or shows 403
         return super().dispatch(request, *args, **kwargs)
     
+class AdminOrJudgeRequiredMixin(AccessMixin):
     
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or  request.user.role not in ['JUDGE', 'ADMIN']:
+            return self.handle_no_permission() # Redirects to login or shows 403
+        return super().dispatch(request, *args, **kwargs)
     
 # thangta/permissions.py
 

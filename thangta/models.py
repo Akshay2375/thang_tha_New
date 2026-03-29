@@ -185,7 +185,7 @@ class Score(models.Model):
     
     # Fields for Judge Control
     round_num = models.IntegerField(default=1) # Tracks if this score was in Round 1, 2, or 3
-    sub_round = models.IntegerField(default=1) 
+    # sub_round = models.IntegerField(default=1) 
     is_foul = models.BooleanField(default=False)
     foul_reason = models.CharField(max_length=255, blank=True, null=True)
     is_flagged = models.BooleanField(default=False) 
@@ -198,4 +198,4 @@ class Score(models.Model):
     def __str__(self):
         foul_str = f" (FOUL: {self.foul_reason})" if self.is_foul else ""
         scorer_name = self.scorer.username if self.scorer else "Unknown Scorer"
-        return f"SR{self.sub_round} - {self.points} pts for {self.participant.name} by {scorer_name}{foul_str}"
+        return f" {self.points} pts for {self.participant.name} by {scorer_name}{foul_str}"

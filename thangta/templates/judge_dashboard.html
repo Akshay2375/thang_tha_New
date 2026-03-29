@@ -2,46 +2,58 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>Judge Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <title>Judge Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light p-3">
 
-<div class="container max-w-md mx-auto">
-    <div class="text-center mb-4 mt-3">
-        <h2 class="fw-bold">Judge Panel</h2>
-        <p class="text-muted">Welcome, {{ request.user.first_name|default:request.user.username }}</p>
+<div class="container max-w-md mx-auto" style="max-width: 800px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4 mt-3">
+        <div>
+            <h2 class="fw-bold m-0">Judge Panel</h2>
+            <p class="text-muted m-0">Welcome, {{ request.user.first_name|default:request.user.username }}</p>
+        </div>
+        <div>
+            <a href="{% url 'global-fixtures' %}" class="btn btn-outline-dark fw-bold shadow-sm">📊 View All Matches</a>
+        </div>
     </div>
 
     {% for tournament in live_tournaments %}
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-dark text-white text-center py-3">
+        <div class="card shadow-sm border-0 mb-4 rounded-4 overflow-hidden">
+            <div class="card-header bg-dark text-white text-center py-3 border-0">
                 <h5 class="m-0 fw-bold">{{ tournament.name }}</h5>
             </div>
             <div class="card-body text-center p-4">
-                <p class="text-muted mb-4">Select your assigned ring to view the fight schedule.</p>
+                <p class="text-muted mb-4 fs-5">Select your assigned ring to view your fight schedule.</p>
                 
                 <div class="d-flex justify-content-center gap-3 flex-wrap">
                     {% with ''|center:tournament.battle_rings as range %}
                     {% for _ in range %}
-                        <a href="{% url 'judge-ring-matches' tournament.id forloop.counter %}" class="btn btn-primary btn-lg px-4 py-3 fw-bold shadow-sm">
+                        
+                        <a href="{% url 'global-fixtures' %}?tournament={{ tournament.id }}&ring_number={{ forloop.counter }}" 
+                           class="btn btn-primary btn-lg px-5 py-3 fw-bold shadow-sm fs-4">
                             Ring {{ forloop.counter }}
                         </a>
+                        
                     {% endfor %}
                     {% endwith %}
                 </div>
+                
             </div>
         </div>
     {% empty %}
-        <div class="alert alert-info text-center">
-            No live tournaments found. Please wait for the admin to start a tournament.
+        <div class="alert alert-info text-center shadow-sm rounded-4 py-4 fs-5">
+            <span class="fs-1 d-block mb-2">⏳</span>
+            No live tournaments found.<br>Please wait for the admin to start a tournament.
         </div>
     {% endfor %}
     
     <div class="text-center mt-5">
         <form action="{% url 'logout' %}" method="POST">
             {% csrf_token %}
-            <button type="submit" class="btn btn-outline-danger">Log Out</button>
+            <button type="submit" class="btn btn-outline-danger shadow-sm fw-bold px-4">Log Out</button>
         </form>
     </div>
 </div>

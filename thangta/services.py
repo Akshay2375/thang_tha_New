@@ -71,55 +71,88 @@ def generate_round_one_fixtures(tournament, event_type, age_category, weight_cat
     return True, "Round 1 fixtures generated successfully."
 
 
+from .models import Match  # Make sure to import your Match model!
 
+# thangta/services.py
+from .models import Match
 
 def generate_next_round(tournament, event_type, age_category, weight_category, gender, current_round, ring_number):
-    """
-    Takes the winners of the current round and sequentially pairs them for the next round.
-    """
+    """Generates the next round, including Gold and Bronze medal matches."""
     
-    # Get all matches from the current round, ordered by their sequence
     current_matches = Match.objects.filter(
-        tournament=tournament, event_type=event_type, age_category=age_category, 
+        tournament=tournament, event_type=event_type, age_category=age_category,
         weight_category=weight_category, gender=gender, round_number=current_round
     ).order_by('match_sequence')
-
-    # Check termination condition: If there's only 1 match, the winner of it is the Final Champion
-    if current_matches.count() == 1:
-        return False, "Tournament is already complete. We have a champion."
-
-    # Verify all matches in the current round are finished
-    if current_matches.filter(is_completed=False).exists():
-        return False, "Cannot generate next round. Not all matches are completed."
-
-    # Extract winners sequentially (Player 1 vs 3, etc.)
-    winners = [match.winner for match in current_matches if match.winner]
     
-    next_round_number = current_round + 1
-    match_sequence = 1
+    if current_matches.filter(is_completed=False).exists():
+        return False, f"Cannot generate next round. Round {current_round} still has unfinished matches!"
 
-    # Apply the exact same Odd/Even Bye logic, but WITHOUT shuffling to maintain bracket integrity
-    if len(winners) % 2 != 0:
-        bye_participant = winners.pop(0)
+    next_round_num = current_round + 1
+
+    if Match.objects.filter(
+        tournament=tournament, event_type=event_type, age_category=age_category,
+        weight_category=weight_category, gender=gender, round_number=next_round_num
+    ).exists():
+        return False, f"Round {next_round_num} has already been generated."
+
+    # ==========================================
+    # 🏆 THE MEDAL PHASE (Exactly 2 matches left)
+    # ==========================================
+    if current_matches.count() == 2:
+        match_a, match_b = current_matches[0], current_matches[1]
+        
+        finalists = [match_a.winner, match_b.winner]
+        
+        loser_a = match_a.participant_red if match_a.winner == match_a.participant_blue else match_a.participant_blue
+        loser_b = match_b.participant_red if match_b.winner == match_b.participant_blue else match_b.participant_blue
+        
+        # 🥇 Match 1: Gold/Silver Final
         Match.objects.create(
-            tournament=tournament, event_type=event_type, age_category=age_category, 
-            weight_category=weight_category, gender=gender,
-            round_number=next_round_number, match_sequence=match_sequence, ring_number=ring_number,
-            participant_red=bye_participant, participant_blue=None, 
-            winner=bye_participant, is_completed=True
+            tournament=tournament, event_type=event_type, age_category=age_category,
+            weight_category=weight_category, gender=gender, round_number=next_round_num,
+            participant_red=finalists[0], participant_blue=finalists[1],
+            ring_number=ring_number, 
+            match_sequence=1001  # Secret Gold Code
         )
-        match_sequence += 1
-
-    # Pair up the remaining winners sequentially
-    for i in range(0, len(winners), 2):
-        Match.objects.create(
-            tournament=tournament, event_type=event_type, age_category=age_category, 
-            weight_category=weight_category, gender=gender,
-            round_number=next_round_number, match_sequence=match_sequence, ring_number=ring_number,
-            participant_red=winners[i], participant_blue=winners[i+1]
+        
+        # 🥉 Match 2: Bronze Playoff
+        if loser_a and loser_b:
+            Match.objects.create(
+                tournament=tournament, event_type=event_type, age_category=age_category,
+                weight_category=weight_category, gender=gender, round_number=next_round_num,
+                participant_red=loser_a, participant_blue=loser_b,
+                ring_number=ring_number, 
+                match_sequence=1002  # Secret Bronze Code
+            )
             
-        )
-        match_sequence += 1
+        return True, "🏆 Gold/Silver Final and Bronze Playoff successfully generated!"
+
+    # ==========================================
+    # NORMAL ELIMINATION PHASE (> 2 matches)
+    # ==========================================
+    elif current_matches.count() > 2:
+        winners = [m.winner for m in current_matches if m.winner]
         
-        
-    return True, f"Round {next_round_number} generated successfully."
+        if not winners:
+            return False, "No winners found to advance."
+
+        seq = 1
+        for i in range(0, len(winners), 2):
+            p_red = winners[i]
+            p_blue = winners[i+1] if i + 1 < len(winners) else None
+            
+            Match.objects.create(
+                tournament=tournament, event_type=event_type, age_category=age_category,
+                weight_category=weight_category, gender=gender, round_number=next_round_num,
+                participant_red=p_red, participant_blue=p_blue,
+                ring_number=ring_number, match_sequence=seq
+            )
+            seq += 1
+            
+        return True, f"Round {next_round_num} successfully generated!"
+
+    elif current_matches.count() == 1:
+        return False, "Category is complete! The final match has already been played."
+
+    return False, "Failed to generate next round."
+

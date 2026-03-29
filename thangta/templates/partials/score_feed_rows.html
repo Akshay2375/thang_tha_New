@@ -1,10 +1,11 @@
 <div class="row g-0 h-100">
     <div class="col-6 border-end border-2 border-dark">
-        <table class="table table-hover m-0 align-middle">
+        <table class="table table-hover m-0 align-middle text-center">
             <thead class="bg-light" style="position: sticky; top: 0; z-index: 1;">
                 <tr>
-                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2 ps-3">SUB-ROUND</th>
-                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">ACTION</th>
+                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">ROUND</th>
+                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">SUB-ROUND</th>
+                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">SCORE</th>
                     <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">SCORER</th>
                     <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2 text-end pe-3">OVERRIDE</th>
                 </tr>
@@ -12,7 +13,8 @@
             <tbody class="bg-white">
                 {% for score in red_scores %}
                 <tr class="{% if score.is_flagged %}flagged-row{% endif %}">
-                    <td class="fw-bold align-middle text-dark ps-3">{{ score.sub_round }}</td>
+                    <td class="fw-bold align-middle text-dark">{{ score.round_num }}</td>
+                    <td class="fw-bold align-middle text-dark">{{ score.display_sub_round }}</td>
                     <td class="align-middle">
                         {% if score.is_foul %}
                             <span class="badge bg-danger py-1 px-2">{{ score.foul_reason }} (-3)</span>
@@ -30,18 +32,19 @@
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="4" class="text-center text-muted py-4 fst-italic">Waiting for Red Corner...</td></tr>
+                <tr><td colspan="5" class="text-center text-muted py-4 fst-italic">Waiting for Red Corner...</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
     <div class="col-6">
-        <table class="table table-hover m-0 align-middle">
+        <table class="table table-hover m-0 align-middle text-center">
             <thead class="bg-light" style="position: sticky; top: 0; z-index: 1;">
                 <tr>
-                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2 ps-3">SUB-ROUND</th>
-                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">ACTION</th>
+                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">ROUND</th>
+                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">SUB-ROUND</th>
+                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">SCORE</th>
                     <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">SCORER</th>
                     <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2 text-end pe-3">OVERRIDE</th>
                 </tr>
@@ -49,7 +52,8 @@
             <tbody class="bg-white">
                 {% for score in blue_scores %}
                 <tr class="{% if score.is_flagged %}flagged-row{% endif %}">
-                    <td class="fw-bold align-middle text-dark ps-3">{{ score.sub_round }}</td>
+                    <td class="fw-bold align-middle text-dark">{{ score.round_num }}</td>
+                    <td class="fw-bold align-middle text-dark">{{ score.display_sub_round }}</td>
                     <td class="align-middle">
                         {% if score.is_foul %}
                             <span class="badge bg-danger py-1 px-2">{{ score.foul_reason }} (-3)</span>
@@ -67,7 +71,7 @@
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="4" class="text-center text-muted py-4 fst-italic">Waiting for Blue Corner...</td></tr>
+                <tr><td colspan="5" class="text-center text-muted py-4 fst-italic">Waiting for Blue Corner...</td></tr>
                 {% endfor %}
             </tbody>
         </table>

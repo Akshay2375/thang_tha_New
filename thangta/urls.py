@@ -18,9 +18,8 @@ urlpatterns = [
     path('tournaments/<int:tournament_id>/end/', end_tournament, name='tournament-end'),
     path('participants/<int:pk>/edit/', ParticipantUpdateView.as_view(), name='participant-edit'),
     path('participants/<int:pk>/delete/', ParticipantDeleteView.as_view(), name='participant-delete'),
-    
-    # path('tournaments/<int:tournament_id>/fixtures/', manage_fixtures, name='manage-fixtures'),
-    path('tournaments/<int:tournament_id>/matches/', tournament_matches, name='tournament-matches'),
+   path('fixtures/', global_fixtures, name='global-fixtures'),   # path('tournaments/<int:tournament_id>/fixtures/', manage_fixtures, name='manage-fixtures'),
+    # path('tournaments/<int:tournament_id>/matches/', tournament_matches, name='tournament-matches'),
     
     path('matches/<int:match_id>/update/', update_match_winner, name='match-update'),
     path('',TournamentDashboardView.as_view(), name='tournament-dashboard'),
@@ -36,7 +35,7 @@ urlpatterns = [
     path('judge/dashboard/', judge_dashboard, name='judge-dashboard'),
     path('judge/', judge_dashboard, name='judge-dashboard'),
     
-    path('judge/tournament/<int:tournament_id>/ring/<int:ring_number>/', judge_ring_matches, name='judge-ring-matches'),
+
     
     # path('route-dashboard/', dashboard_dispatcher, name='dashboard-dispatcher'),
     path('judge/match/<int:match_id>/api/live-data/', match_live_data, name='match-live-data'),
@@ -61,4 +60,7 @@ urlpatterns = [
     # AJAX History endpoints
     path('scorer/match/<int:match_id>/score-history/', fetch_score_history, name='fetch-score-history'),
     path('scorer/match/<int:match_id>/foul-history/', fetch_foul_history, name='fetch-foul-history'),
+    
+    path('match/<int:match_id>/summary/', match_summary, name='match-summary'),
+    
 ]

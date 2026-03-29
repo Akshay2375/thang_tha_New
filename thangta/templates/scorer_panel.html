@@ -61,7 +61,9 @@
 
 <div class="page-container">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <a href="{% url 'scorer-select-corner' match.id %}" class="btn btn-outline-dark fw-bold">← Back to corner selection</a>
+        <a href="{% url 'tournament-dashboard' %}" class="btn btn-sm btn-outline-secondary shadow-sm fw-bold">
+    ← Exit to Tournaments
+</a>
         <span class="fw-bold">Ring {{ match.ring_number }} • Match {{ match.match_sequence }}</span>
     </div>
     
