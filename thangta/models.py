@@ -186,7 +186,7 @@ class Score(models.Model):
     scorer = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='submitted_scores')
     
     points = models.IntegerField(default=1)
-    
+    sub_round = models.IntegerField(default=1)
     # Fields for Judge Control
     round_num = models.IntegerField(default=1) # Tracks if this score was in Round 1, 2, or 3
     # sub_round = models.IntegerField(default=1) 

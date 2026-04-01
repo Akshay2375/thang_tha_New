@@ -256,55 +256,69 @@ from django.contrib.auth.decorators import login_required
 #         'current_filters': current_filters
 #     })
 
+from django.views.decorators.http import require_POST
+# Make sure your other imports (redirect, get_object_or_404, etc.) are still there!
+
 @judge_required
+@require_POST  # 👈 This forces the view to ONLY accept direct button clicks!
 def update_match_winner(request, match_id):
-    """Manually declares a winner and auto-generates the next round if category is complete."""
+    """Instantly declares a winner, calculates scores, flushes temp data, and auto-generates."""
     match = get_object_or_404(Match, id=match_id)
     
     if match.is_completed:
         messages.info(request, "This match is already completed.")
         return redirect('tournament-matches', tournament_id=match.tournament.id)
 
-    if request.method == 'POST':
-        winner_id = request.POST.get('winner_id')
-        if winner_id:
-            winner = get_object_or_404(Participant, id=winner_id)
-            if winner == match.participant_red or winner == match.participant_blue:
-                match.winner = winner
-                match.is_completed = True
-                match.save()
-                
-                category_matches = Match.objects.filter(
-                    tournament=match.tournament, event_type=match.event_type,
-                    gender=match.gender, age_category=match.age_category,
-                    weight_category=match.weight_category, round_number=match.round_number
-                )
-                
-                if not category_matches.filter(is_completed=False).exists():
-                    if category_matches.count() > 1:
-                        success, msg = generate_next_round(
-                            tournament=match.tournament, event_type=match.event_type,
-                            age_category=match.age_category, weight_category=match.weight_category,
-                            gender=match.gender, current_round=match.round_number, ring_number=match.ring_number
-                        )
-                        if success:
-                            messages.success(request, f"🏆 {winner.name} wins! Round {match.round_number + 1} automatically generated!")
-                            url = reverse('tournament-matches', args=[match.tournament.id])
-                            return redirect(f"{url}?round={match.round_number + 1}")
-                    else:
-                        messages.success(request, f"🏆 {winner.name} wins the Final! Category Complete.")
+    winner_id = request.POST.get('winner_id')
+    if winner_id:
+        winner = get_object_or_404(Participant, id=winner_id)
+        if winner == match.participant_red or winner == match.participant_blue:
+            
+            # 1. Calculate & Save
+            final_red = calculate_corner_score(match, match.participant_red)
+            final_blue = calculate_corner_score(match, match.participant_blue)
+            
+            match.score_red = final_red
+            match.score_blue = final_blue
+            match.winner = winner
+            match.is_completed = True
+            match.save()
+            
+            # 2. Flush Temp Data
+            Score.objects.filter(match=match).delete()
+            
+            # 3. Auto-Generate Next Round Logic
+            category_matches = Match.objects.filter(
+                tournament=match.tournament, event_type=match.event_type,
+                gender=match.gender, age_category=match.age_category,
+                weight_category=match.weight_category, round_number=match.round_number
+            )
+            
+            if not category_matches.filter(is_completed=False).exists():
+                if category_matches.count() > 1:
+                    success, msg = generate_next_round(
+                        tournament=match.tournament, event_type=match.event_type,
+                        age_category=match.age_category, weight_category=match.weight_category,
+                        gender=match.gender, current_round=match.round_number, ring_number=match.ring_number
+                    )
+                    if success:
+                        messages.success(request, f"🏆 {winner.name} wins ({final_red} - {final_blue})! Round {match.round_number + 1} generated!")
+                        url = reverse('tournament-matches', args=[match.tournament.id])
+                        return redirect(f"{url}?round={match.round_number + 1}")
                 else:
-                    messages.success(request, f"🏆 {winner.name} declared as the winner!")
-                
-                url = reverse('tournament-matches', args=[match.tournament.id])
-                return redirect(f"{url}?round={match.round_number}")
+                    messages.success(request, f"🏆 {winner.name} wins the Final ({final_red} - {final_blue})! Category Complete.")
             else:
-                messages.error(request, "Invalid winner selected.")
+                messages.success(request, f"🏆 {winner.name} declared as the winner ({final_red} - {final_blue})!")
+            
+            url = reverse('tournament-matches', args=[match.tournament.id])
+            return redirect(f"{url}?round={match.round_number}")
+        else:
+            messages.error(request, "Invalid winner selected.")
 
-    return render(request, 'match_update_score.html', {'match': match})
-
- 
+    # Fallback if something goes wrong (no need to render an HTML page anymore)
+    return redirect('tournament-matches', tournament_id=match.tournament.id)
 # thangta/views.py
+
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
 from .models import Match
@@ -729,13 +743,26 @@ def scorer_panel(request, match_id):
         messages.warning(request, "This match is not currently active.")
         return redirect('tournament-dashboard')
 
+    # ==========================================
+    # 🚨 NEW: THE DEVELOPER RESET HACK
+    # ==========================================
+    session_key = f"locked_corner_match_{match.id}"
+    
+    if request.GET.get('reset') == 'true':
+        if session_key in request.session:
+            del request.session[session_key]
+            request.session.modified = True
+        messages.success(request, "Security lock removed! You can now pick a new corner.")
+        return redirect('scorer-select-corner', match_id=match.id)
+    # ==========================================
+
     if corner == 'blue' and not match.participant_blue:
         messages.error(request, "Invalid corner selected.")
         return redirect('scorer-select-corner', match_id=match.id)
 
-    # --- NEW SECURITY LOCK LOGIC ---
-    session_key = f"locked_corner_match_{match.id}"
+    # --- EXISTING SECURITY LOCK LOGIC ---
     locked_corner = request.session.get(session_key)
+    # ... (the rest of your view remains the same)
 
     if locked_corner:
         # If they try to change the URL manually from ?corner=red to ?corner=blue, stop them!
@@ -752,9 +779,19 @@ def scorer_panel(request, match_id):
         return redirect('scorer-select-corner', match_id=match.id)
     # -------------------------------
 
-    # Get their correct sub-round count
+    
+  # 1. Figure out exactly which fighter this panel is scoring
+    participant = match.participant_red if corner == 'red' else match.participant_blue
+    
+    # 2. Force the round to be a strict integer to prevent database mismatch bugs
+    current_round_int = int(match.current_round)
+
+    # 3. The BULLETPROOF Count: Match + Round + Fighter + Specific Judge
     scorer_score_count = Score.objects.filter(
-        match=match, round_num=match.current_round, scorer=request.user
+        match=match, 
+        round_num=current_round_int, 
+        participant=participant,
+        scorer=request.user 
     ).count()
     
     current_sub_round = scorer_score_count + 1
@@ -767,12 +804,37 @@ def scorer_panel(request, match_id):
         'total_score': 0,
         'db_score_count': 0, 
     })
-
 from django.http import HttpResponse
 
 
 
 import math
+
+from django.db.models import Avg
+
+def calculate_corner_score(match, participant):
+    """
+    Groups all scores for a fighter by Sub-Round, averages the judges' 
+    inputs for each sub-round, and returns the total sum of those averages.
+    """
+    # 1. Ask the database to group by round & sub_round, and calculate the average points
+    sub_round_averages = Score.objects.filter(
+        match=match,
+        participant=participant
+    ).values(
+        'round_number', 'sub_round'
+    ).annotate(
+        avg_points=Avg('points')
+    )
+
+    # 2. Add all the averages together
+    total_score = 0.0
+    for sr in sub_round_averages:
+        # avg_points might be None if there are no scores yet, so we default to 0
+        total_score += float(sr['avg_points'] or 0)
+
+    # 3. Return rounded to 2 decimal places (e.g., 5.50 or -3.00)
+    return round(total_score, 2)
 
 def calculate_round_score(match, participant, round_num):
     """
@@ -822,42 +884,24 @@ from django.shortcuts import get_object_or_404
 @scorer_required
 @require_POST
 def submit_score(request, match_id):
-    """Saves the score (Max 6) and strictly increments the Scorer's local session sub-round."""
     match = get_object_or_404(Match, id=match_id)
     participant = get_object_or_404(Participant, id=request.POST.get('participant_id'))
     is_foul = request.POST.get('is_foul') == 'true'
     
-    # 1. THE FIX: Safely increment the sub-round session for this specific scorer!
-    session_key = f"match_{match.id}_round_{match.current_round}_subround"
-    current_sub = request.session.get(session_key, 1)
-    request.session[session_key] = current_sub + 1
-    request.session.modified = True  # Forces Django to save the session immediately
+    # Force integer!
+    current_round_int = int(match.current_round)
     
-    # 2. Save the Scores
-    if is_foul:
-        Score.objects.create(
-            match=match, participant=participant, scorer=request.user,
-            points=-3, is_foul=True, foul_reason=request.POST.get('foul_reason', ''), 
-            round_num=match.current_round
-        )
-    else:
-        points_str = request.POST.get('points', '')
-        if points_str:
-            scorer_total = sum(int(pt.strip()) for pt in points_str.split(',') if pt.strip().isdigit())
-            
-            if scorer_total > 6:
-                scorer_total = 6
-                
-            if scorer_total > 0:
-                Score.objects.create(
-                    match=match, participant=participant, scorer=request.user,
-                    points=scorer_total, is_foul=False, 
-                    round_num=match.current_round
-                )
-            
-    return JsonResponse({'status': 'success'})
-
-
+    # The exact same bulletproof count
+    scorer_score_count = Score.objects.filter(
+        match=match, 
+        round_num=current_round_int, 
+        participant=participant,
+        scorer=request.user
+    ).count()
+    
+    current_sub = scorer_score_count + 1
+    
+    # ... (Keep all your Score.objects.create() code exactly the same below this!) ...
 from django.http import HttpResponse
 
 @scorer_required
@@ -895,16 +939,9 @@ def fetch_foul_history(request, match_id):
 
 @judge_required
 def update_match_winner(request, match_id):
-    """Manually declares a winner, frees the ring, and auto-generates the next round."""
+    """Manually declares a winner, calculates final scores, flushes temp data, and auto-generates next round."""
     match = get_object_or_404(Match, id=match_id)
     
-    # 1. THE FIX: Calculate the TRUE totals using our new (A+B+C)/3 formula!
-    total_red = sum(calculate_round_score(match, match.participant_red, r) for r in range(1, match.current_round + 1))
-    
-    total_blue = 0
-    if match.participant_blue:
-        total_blue = sum(calculate_round_score(match, match.participant_blue, r) for r in range(1, match.current_round + 1))
-
     if match.is_completed:
         messages.info(request, "This match is already completed.")
         return redirect('tournament-matches', tournament_id=match.tournament.id)
@@ -914,16 +951,30 @@ def update_match_winner(request, match_id):
         if winner_id:
             winner = get_object_or_404(Participant, id=winner_id)
             if winner == match.participant_red or winner == match.participant_blue:
+                
+                # ==========================================
+                # 🚨 NEW: CALCULATE, SAVE, AND FLUSH LOGIC 🚨
+                # ==========================================
+                
+                # 1. Calculate final mathematically perfect scores from the temp DB
+                final_red = calculate_corner_score(match, match.participant_red)
+                final_blue = calculate_corner_score(match, match.participant_blue)
+                
+                # 2. Save everything to the permanent Match record
+                match.score_red = final_red      # Ensure your Match model has this field!
+                match.score_blue = final_blue    # Ensure your Match model has this field!
                 match.winner = winner
                 match.is_completed = True
-                match.is_active = False 
-                
-                # NEW: Save the mathematically perfect final scores to the Match object!
-                match.score_red = total_red
-                match.score_blue = total_blue
                 match.save()
                 
-                # ... (The rest of your auto-generate next round logic stays exactly the same!) ...
+                # 3. THE CLEANUP (The Flush)
+                # Wipe the temporary sub-round click data to keep the database light!
+                Score.objects.filter(match=match).delete()
+                
+                # ==========================================
+                
+                # ... (The rest of your excellent auto-generation logic remains untouched) ...
+                
                 category_matches = Match.objects.filter(
                     tournament=match.tournament, event_type=match.event_type,
                     gender=match.gender, age_category=match.age_category,
@@ -938,25 +989,38 @@ def update_match_winner(request, match_id):
                             gender=match.gender, current_round=match.round_number, ring_number=match.ring_number
                         )
                         if success:
-                            messages.success(request, f"🏆 {winner.name} wins! Round {match.round_number + 1} automatically generated!")
+                            messages.success(request, f"🏆 {winner.name} wins ({final_red} - {final_blue})! Round {match.round_number + 1} automatically generated!")
                             url = reverse('tournament-matches', args=[match.tournament.id])
                             return redirect(f"{url}?round={match.round_number + 1}")
                     else:
-                        messages.success(request, f"🏆 {winner.name} wins the Final! Category Complete.")
+                        messages.success(request, f"🏆 {winner.name} wins the Final ({final_red} - {final_blue})! Category Complete.")
                 else:
-                    messages.success(request, f"🏆 {winner.name} declared as the winner!")
+                    messages.success(request, f"🏆 {winner.name} declared as the winner ({final_red} - {final_blue})!")
                 
-                # Go back to the main dashboard or ring queue
-                return redirect('judge-dashboard')
+                url = reverse('tournament-matches', args=[match.tournament.id])
+                return redirect(f"{url}?round={match.round_number}")
             else:
                 messages.error(request, "Invalid winner selected.")
-                
-    # Pass the calculated totals to the template (using the keys your template already expects)
-    return render(request, 'match_update_score.html', {
-        'match': match,
-        'red_score': total_red,
-        'blue_score': total_blue
-    })
+
+    return render(request, 'match_update_score.html', {'match': match})
+
+
+from django.db.models import Avg
+from .models import Score # Ensure you import the temporary Score model
+
+def calculate_corner_score(match, participant):
+    """Calculates the sub-round averages and returns the total."""
+    sub_round_averages = Score.objects.filter(
+        match=match,
+        participant=participant
+    ).values(
+        'round_num', 'sub_round'
+    ).annotate(
+        avg_points=Avg('points')
+    )
+
+    total_score = sum(float(sr['avg_points'] or 0) for sr in sub_round_averages)
+    return round(total_score, 2)
 
 @judge_required
 def start_match(request, match_id):

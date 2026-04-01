@@ -98,8 +98,8 @@
             </div>
             <div class="col-4 px-2">
                 <label>Sub-round</label>
-                <div id="current-sub-round-display" class="corner-label fw-bold text-dark border rounded bg-white py-1 shadow-sm">
-                    {{ current_sub_round }}
+                <div id="current-sub-round-display" class="corner-label fw-bold text-dark border rounded bg-white py-1 shadow-sm d-flex align-items-center justify-content-center" style="min-height: 40px;">
+                    {{ current_sub_round|default:"1" }}
                 </div>
             </div>
             <div class="col-4 px-2">
@@ -177,6 +177,12 @@
     let currentActiveSubRound = parseInt("{{ current_sub_round }}") || 1;
     let currentActiveRound = parseInt("{{ match.current_round|default:'1' }}");
 
+    // ==========================================
+    // 🚨 NEW: THE VIP PASS FLAG
+    // ==========================================
+    let isSafeToReload = false; 
+    let isMatchOfficiallyOver = false;
+
     function updateUI() {
         if (selectedFoulType) {
             document.getElementById('ui-sequence').innerText = 'FOUL';
@@ -239,11 +245,13 @@
     }
 
     function submitScores(participantId) {
+        if (event) { event.preventDefault(); }
+
         const formData = new FormData();
         formData.append('participant_id', participantId);
         formData.append('is_foul', selectedFoulType !== null);
         formData.append('foul_reason', selectedFoulType || '');
-        formData.append('points', pendingScores.join(','));
+        formData.append('points', pendingScores.length > 0 ? pendingScores.join(',') : '0');
         formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
         const submitBtn = document.getElementById('submit-scores-btn');
@@ -259,48 +267,44 @@
             if(data.status === 'success') {
                 flashToast("Success", "✓ Sub-round submitted!", "success");
                 
-                // AUTO-INCREMENT Sub-Round locally
-                currentActiveSubRound++; 
-                document.getElementById('current-sub-round-display').innerText = currentActiveSubRound;
+                // Activate the VIP Pass before reloading!
+                isSafeToReload = true; 
                 
-                // Clear the board for the NEW round!
-                pendingScores = [];
-                dbPointsString = "";
-                dbTotalScore = 0;
-                dbScoreCount = 0;
-                
-                clearFoulSelection(); 
-                updateUI();
-                syncMatchState(); // Just ping the backend to verify state
+                setTimeout(() => {
+                    window.location.reload(true); 
+                }, 500);
             } else {
                 flashToast("Error", data.message || "Submission failed.", "danger");
                 pendingScores = [];
                 clearFoulSelection();
                 updateUI();
+                submitBtn.disabled = false;
+                submitBtn.innerText = "✓ Submit Scores";
             }
         })
-        .finally(() => {
+        .catch(error => {
+            console.error("Submission Error:", error);
             submitBtn.disabled = false;
             submitBtn.innerText = "✓ Submit Scores";
         });
     }
 
-    // Renamed from refreshHistoryTables to syncMatchState
     function syncMatchState() {
         fetch("{% url 'fetch-score-history' match.id %}?corner={{ corner }}")
         .then(response => {
-            // 1. MAIN ROUND CHECK (Triggers alert if Judge advanced the match)
             let serverRound = parseInt(response.headers.get('X-Current-Round'));
             if (!isNaN(serverRound) && serverRound > currentActiveRound) {
                 let roundName = (serverRound === 3) ? "the TIE BREAKER" : "ROUND " + serverRound;
                 alert("🔔 ATTENTION SCORER: The Judge has officially started " + roundName + "!");
+                
+                isSafeToReload = true; // Activate VIP Pass
                 window.location.reload(); 
                 return;
             }
 
-            // 2. SUB-ROUND CHECK (Ensures scorer stays synced)
             let serverSubRound = parseInt(response.headers.get('X-Current-Sub-Round'));
             if (!isNaN(serverSubRound) && serverSubRound !== currentActiveSubRound) {
+                isSafeToReload = true; // Activate VIP Pass
                 window.location.reload(); 
                 return;
             }
@@ -318,12 +322,9 @@
 
     // Initialize UI on load
     updateUI();
-    
-    // Background ping every 5 seconds just to listen for the Judge's round change
     setInterval(syncMatchState, 5000);
 
-
- const matchId = "{{ match.id }}";
+    const matchId = "{{ match.id }}";
     const fixturesUrl = "{% url 'tournament-matches' match.tournament.id %}"; 
 
     setInterval(function() {
@@ -331,23 +332,18 @@
             .then(response => response.json())
             .then(data => {
                 if (data.is_completed === true) {
-                    
-                    // THE FIX: Turn off the security lock!
                     isMatchOfficiallyOver = true; 
-                    
-                    // Now safely redirect them
+                    isSafeToReload = true; // Activate VIP Pass
                     window.location.href = fixturesUrl;
                 }
             })
             .catch(error => console.error('Error checking match status:', error));
     }, 3000);
 
-// ==========================================
+    // ==========================================
     // 🛡️ SCORER LOCKDOWN ENGINE
     // ==========================================
     
-    let isMatchOfficiallyOver = false;
-
     // 1. Trap the Phone's physical "Back" button or Swipe gesture
     history.pushState(null, null, location.href);
     window.addEventListener('popstate', function () {
@@ -357,18 +353,14 @@
         }
     });
 
-    // 2. Warn if they try to refresh or close the browser tab
+    // 2. The Final Fix: Respect the VIP Pass!
     window.addEventListener('beforeunload', function (e) {
-        if (!isMatchOfficiallyOver) {
-            // Standard browser warning for closing an active tab
+        if (!isMatchOfficiallyOver && !isSafeToReload) {
             e.preventDefault(); 
             e.returnValue = ''; 
         }
     });
 
-
-
 </script>
-
 </body>
 </html>
