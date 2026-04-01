@@ -61,9 +61,7 @@
 
 <div class="page-container">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <a href="{% url 'tournament-dashboard' %}" class="btn btn-sm btn-outline-secondary shadow-sm fw-bold">
-    ← Exit to Tournaments
-</a>
+   
         <span class="fw-bold">Ring {{ match.ring_number }} • Match {{ match.match_sequence }}</span>
     </div>
     
@@ -90,7 +88,12 @@
             <div class="col-4 px-2">
                 <label>Round</label>
                 <div class="corner-label fw-bold text-primary border border-primary rounded bg-white py-1 shadow-sm">
+                    {% if match.current_round == '3' %}
+                    {{match.current_round }}
+                    TIE BREAKER
+                    {% else %}
                     {{ match.current_round|default:"1" }}
+                    {% endif %}
                 </div>
             </div>
             <div class="col-4 px-2">
@@ -158,9 +161,7 @@
         </div>
     </div>
 
-    <div class="text-center mb-5 pb-5">
-        <a href="{% url 'scorer-ring-matches' match.tournament.id match.ring_number %}" class="btn btn-danger btn-lg w-100 shadow fw-bold p-3" style="border-radius: 12px; max-width: 500px;">🛑 End Scoring & Exit</a>
-    </div>
+   
 
 </div>
 
@@ -320,6 +321,52 @@
     
     // Background ping every 5 seconds just to listen for the Judge's round change
     setInterval(syncMatchState, 5000);
+
+
+ const matchId = "{{ match.id }}";
+    const fixturesUrl = "{% url 'tournament-matches' match.tournament.id %}"; 
+
+    setInterval(function() {
+        fetch(`/match/${matchId}/status/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.is_completed === true) {
+                    
+                    // THE FIX: Turn off the security lock!
+                    isMatchOfficiallyOver = true; 
+                    
+                    // Now safely redirect them
+                    window.location.href = fixturesUrl;
+                }
+            })
+            .catch(error => console.error('Error checking match status:', error));
+    }, 3000);
+
+// ==========================================
+    // 🛡️ SCORER LOCKDOWN ENGINE
+    // ==========================================
+    
+    let isMatchOfficiallyOver = false;
+
+    // 1. Trap the Phone's physical "Back" button or Swipe gesture
+    history.pushState(null, null, location.href);
+    window.addEventListener('popstate', function () {
+        if (!isMatchOfficiallyOver) {
+            history.pushState(null, null, location.href);
+            flashToast("Warning", "Navigating away is disabled during an active match!", "danger");
+        }
+    });
+
+    // 2. Warn if they try to refresh or close the browser tab
+    window.addEventListener('beforeunload', function (e) {
+        if (!isMatchOfficiallyOver) {
+            // Standard browser warning for closing an active tab
+            e.preventDefault(); 
+            e.returnValue = ''; 
+        }
+    });
+
+
 
 </script>
 

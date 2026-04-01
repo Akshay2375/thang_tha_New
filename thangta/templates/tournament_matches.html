@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Master Fixtures</title>
+    <title>{{ tournament.name }} - Fixtures</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .match-card { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
@@ -11,10 +11,13 @@
         .blue-corner { background-color: #e6f2ff; color: #0d6efd; border: 1px solid #b6d4fe; }
         .bye-corner { background-color: #f8f9fa; color: #6c757d; border: 1px dashed #ced4da; font-style: italic; }
         .round-header { background-color: #f1f5f9; padding: 10px 20px; border-radius: 8px; color: #1e293b; font-weight: bold; margin-bottom: 1.5rem; }
+        
         .clickable-card { cursor: pointer; transition: transform 0.2s ease, opacity 0.2s ease; }
         .clickable-card:hover { transform: scale(1.02); opacity: 1 !important; }
+        
         .bracket-container { display: flex; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2rem; gap: 2rem; }
         .round-column { display: flex; flex-direction: column; min-width: 340px; max-width: 340px; }
+        
         .bracket-container::-webkit-scrollbar { height: 10px; }
         .bracket-container::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 8px; }
         .bracket-container::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 8px; }
@@ -25,19 +28,26 @@
 {% include 'partials/navbar.html' %}
 
 <div class="container-fluid">
+    
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold m-0">🌍 Master Fixtures List</h2>
-            <p class="text-muted fs-5 m-0">All Tournaments</p>
+            <h2 class="fw-bold m-0">🏆 Tournament Fixtures</h2>
+            <p class="text-muted fs-5 m-0">
+                {{ tournament.name }} 
+                <span class="badge bg-primary ms-2 shadow-sm">Ring {{ session_ring }}</span>
+            </p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 align-items-center">
+            {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
+                <a href="{% url 'manage-fixtures' tournament.id %}" class="btn btn-warning fw-bold text-dark shadow-sm">+ Generate New Bracket</a>
+            {% endif %}
             <a href="{% url 'tournament-dashboard' %}" class="btn btn-outline-dark shadow-sm">← Dashboard</a>
         </div>
     </div>
 
     <div class="card shadow-sm border-0 mb-5 rounded-3">
         <div class="card-body p-4 bg-white">
-             <form method="GET" class="row g-2 align-items-end">
+           <form method="GET" class="row g-2 align-items-end">
     
     <div class="col-md">
         <label class="form-label text-muted small fw-bold">Event</label>
@@ -91,7 +101,7 @@
 
     <div class="col-md-auto d-flex gap-2">
         <button type="submit" class="btn btn-dark fw-bold shadow-sm px-4">Filter</button>
-        
+        <a href="{% url 'tournament-matches' tournament.id %}" class="btn btn-outline-secondary shadow-sm">Clear</a>
     </div>
     
 </form>
@@ -99,11 +109,13 @@
     </div>
 
     {% regroup matches by round_number as rounds %}
+    
     {% if rounds %}
         <div class="bracket-container">
             {% for round in rounds %}
                 <div class="round-column">
                     <h3 class="round-header shadow-sm text-center">Round {{ round.grouper }}</h3>
+                    
                     <div class="d-flex flex-column gap-4">
                         {% for match in round.list %}
                             <div class="card match-card {% if match.is_completed %}opacity-75 clickable-card{% endif %}" 
@@ -111,7 +123,6 @@
                                  {% if match.is_completed %}onclick="window.location.href='{% url 'match-summary' match.id %}'"{% endif %}>
                                 
                                 <div class="card-body text-center p-4 d-flex flex-column h-100">
-                                    <p class="text-muted small mb-1 fw-bold">{{ match.tournament.name }}</p>
                                     <p class="text-muted small mb-1">{{ match.full_category_name|default:match.event_type }}</p>
                                     
                                     <h6 class="fw-bold mb-4 text-dark">
@@ -138,6 +149,7 @@
                                         {% if match.is_completed %}
                                             <div class="alert alert-success m-0 py-2 fw-bold shadow-sm">🏆 Winner: {{ match.winner.name }}</div>
                                             <div class="text-primary small mt-2 fw-bold">📊 Click to view scoreboard</div>
+                                            
                                         {% elif match.is_active %}
                                             <div class="alert alert-warning m-0 py-2 fw-bold shadow-sm mb-2 text-dark">🔴 LIVE MATCH</div>
                                             {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
@@ -145,6 +157,7 @@
                                             {% elif request.user.role == 'SCORER' %}
                                                 <a href="{% url 'scorer-select-corner' match.id %}" class="btn btn-primary w-100 fw-bold shadow-sm">📱 Score Match</a>
                                             {% endif %}
+                                            
                                         {% else %}
                                             <span class="badge bg-light text-dark border p-2 mb-2 w-100 d-inline-block">Waiting to Start</span>
                                             {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
@@ -152,6 +165,7 @@
                                             {% endif %}
                                         {% endif %}
                                     </div>
+                                    
                                 </div>
                             </div>
                         {% endfor %}
@@ -160,9 +174,13 @@
             {% endfor %}
         </div>
     {% else %}
-        <div class="text-center py-5"><h4 class="text-muted fst-italic">No matches found for these filters.</h4></div>
+        <div class="text-center py-5">
+            <h4 class="text-muted fst-italic">No matches found in this ring for these filters.</h4>
+        </div>
     {% endif %}
+
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

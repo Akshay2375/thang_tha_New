@@ -91,6 +91,10 @@ class Participant(models.Model):
     # --- Personal Information ---
     name = models.CharField(max_length=200, null=True, blank=True)
     actual_age = models.IntegerField(null=True, blank=True, help_text="Age in numbers")
+    
+    date_of_birth = models.DateField(null=True, blank=True) # Add this!
+    age = models.IntegerField(default = 0)
+    
     gender = models.CharField(max_length=10, choices=GenderChoices.choices, null=True, blank=True)
     contact = models.CharField(max_length=15, null=True, blank=True)
     
@@ -199,3 +203,10 @@ class Score(models.Model):
         foul_str = f" (FOUL: {self.foul_reason})" if self.is_foul else ""
         scorer_name = self.scorer.username if self.scorer else "Unknown Scorer"
         return f" {self.points} pts for {self.participant.name} by {scorer_name}{foul_str}"
+    
+class District(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    access_code = models.CharField(max_length=50) # The secret password for coaches
+
+    def __str__(self):
+        return self.name

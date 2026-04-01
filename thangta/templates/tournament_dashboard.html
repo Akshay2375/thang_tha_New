@@ -53,7 +53,7 @@
                         <div><span class="badge bg-success mb-2">Ongoing Now</span></div>
                         
                         {% if request.user.is_authenticated %}
-                            <a href="{% url 'global-fixtures' %}" class="btn btn-primary w-100 fw-bold shadow-sm">
+                            <a href="{% url 'select-ring' tournament.id %}" class="btn btn-primary w-100 fw-bold shadow-sm">
                                 🏆 View Fixtures & Matches
                             </a>
                             

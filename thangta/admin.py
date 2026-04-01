@@ -1,7 +1,7 @@
 # thangta/admin.py
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, Tournament, Participant, Match
+from .models import *
 
 # 1. Custom User Admin
 @admin.register(CustomUser)
@@ -45,3 +45,15 @@ from .models import Score # Make sure to add Score to your imports at the top!
 @admin.register(Score)
 class ScoreAdmin(admin.ModelAdmin):
     list_display = ('match', 'participant', 'points',  'is_foul')
+    
+    
+@admin.register(District)
+class DistrictAdmin(admin.ModelAdmin):
+    # This tells the admin panel to show both the name AND the code in the list view
+    list_display = ('name', 'access_code')
+    
+    # Adds a search bar so you can quickly find a district
+    search_fields = ('name',)
+    
+    # Orders them alphabetically by default
+    ordering = ('name',)

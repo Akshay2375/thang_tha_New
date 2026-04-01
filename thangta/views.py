@@ -301,9 +301,15 @@ def judge_dashboard(request):
     # Or, if you prefer they land on the main home screen instead:
     # return redirect('tournament-dashboard')
 
+import random
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.db.models import Max
+# Make sure to import your models!
+
 @judge_required
 def judge_generate_fixtures(request, tournament_id, ring_number):
-    """Judge generates a bracket and it auto-assigns to their current ring."""
+    """Judge generates a bracket and it safely auto-assigns to the end of their current ring's schedule."""
     tournament = get_object_or_404(Tournament, id=tournament_id)
     
     if request.method == 'POST':
@@ -325,19 +331,41 @@ def judge_generate_fixtures(request, tournament_id, ring_number):
         participant_list = list(participants)
         random.shuffle(participant_list)
 
-        match_seq = 1
+        # FIX 1: Find the highest match sequence currently in this ring so we don't overlap!
+        current_max_seq = Match.objects.filter(
+            tournament=tournament, 
+            ring_number=ring_number
+        ).aggregate(Max('match_sequence'))['match_sequence__max']
+        
+        # If there are no matches yet, start at 1. Otherwise, start after the last match.
+        match_seq = 1 if current_max_seq is None else current_max_seq + 1
+
         for i in range(0, num_participants, 2):
             p1 = participant_list[i]
             p2 = participant_list[i+1] if (i + 1) < num_participants else None
+            
+            # FIX 2: If p2 is None, this is a "Bye". We instantly mark the match as completed!
+            is_bye = (p2 is None)
 
             Match.objects.create(
-                tournament=tournament, participant_red=p1, participant_blue=p2,
-                ring_number=ring_number, match_sequence=match_seq, round_number=1,
-                gender=gender, age_category=age_category, weight_category=weight_category, event_type=event_type
+                tournament=tournament, 
+                participant_red=p1, 
+                participant_blue=p2,
+                ring_number=ring_number, 
+                match_sequence=match_seq, 
+                round_number=1,
+                gender=gender, 
+                age_category=age_category, 
+                weight_category=weight_category, 
+                event_type=event_type,
+                
+                # If it's a bye, auto-complete it and declare p1 the winner!
+                is_completed=is_bye,
+                winner=p1 if is_bye else None
             )
             match_seq += 1
 
-        messages.success(request, f'Fixtures successfully generated for Ring {ring_number}!')
+        messages.success(request, f'Fixtures successfully generated and added to Ring {ring_number} schedule!')
         return redirect('judge-ring-matches', tournament_id=tournament.id, ring_number=ring_number)
 
     return render(request, 'generate_fixtures.html', {'tournament': tournament, 'ring_number': ring_number})
@@ -364,9 +392,26 @@ def judge_live_match(request, match_id):
     blue_score = 0
     if match.participant_blue:
         blue_score = valid_scores.filter(participant=match.participant_blue).aggregate(Sum('points'))['points__sum'] or 0
+        
+    
+    red_scores = list(Score.objects.filter(match=match, participant=match.participant_red).order_by('timestamp'))
+
+# 2. THE FIX: Dynamically assign the correct Queue Sub-Round!
+# (index // 3) + 1 ensures that scores 0,1,2 become Sub-Round 1. Scores 3,4,5 become Sub-Round 2.
+    for index, score in enumerate(red_scores):
+        score.display_sub_round = (index // 3) + 1
+
+    # 3. Reverse it so the newest scores appear at the top of the table
+    red_scores.reverse()
+
+    # Do the exact same thing for the Blue corner
+    blue_scores = list(Score.objects.filter(match=match, participant=match.participant_blue).order_by('timestamp'))
+    for index, score in enumerate(blue_scores):
+        score.display_sub_round = (index // 3) + 1
+    blue_scores.reverse()
 
     return render(request, 'judge_live_match.html', {
-        'match': match, 'red_score': red_score, 'blue_score': blue_score, 'score_feed': score_feed
+            'match': match, 'red_score': red_score, 'blue_score': blue_score, 'score_feed': score_feed
     })
 
 
@@ -568,7 +613,7 @@ def manage_fixtures(request, tournament_id):
             # Flash the success or error message from your services.py file
             if success:
                 messages.success(request, msg)
-                return redirect('tournament-matches', tournament_id=tournament.id)
+                return redirect('global-fixtures', tournament_id=tournament.id)
             else:
                 messages.error(request, msg)
                 return redirect('manage-fixtures', tournament_id=tournament.id)
@@ -616,25 +661,15 @@ def scorer_ring_matches(request, tournament_id, ring_number): # (Your function n
 from django.urls import reverse
 from django.contrib import messages
 
-@scorer_required
 def scorer_select_corner(request, match_id):
-    """Lets the scorer pick a corner, UNLESS they are already locked in."""
     match = get_object_or_404(Match, id=match_id)
-
-    # THE LOCK CHECK: Look for the digital stamp in their session
-    session_key = f"locked_corner_match_{match.id}"
-    locked_corner = request.session.get(session_key)
-
-    if locked_corner:
-        # They are already locked in! Bounce them straight back to their panel.
-        messages.info(request, f"You are locked into the {locked_corner.upper()} corner for this match.")
-        url = reverse('scorer-panel', args=[match.id])
-        return redirect(f"{url}?corner={locked_corner}")
-
-    # If no lock is found, let them pick a corner normally
-    return render(request, 'scorer_select_corner.html', {'match': match})
-
-
+    
+    # THE FIX: Save the Tournament ID into the scorer's session
+    request.session['active_tournament_id'] = match.tournament.id
+    
+    return render(request, 'scorer_panel.html', {
+        'match': match,
+    })
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -691,57 +726,49 @@ from django.http import HttpResponse
 
 
 
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404
-
-from django.db.models import Sum, Max
-
 import math
-from django.db.models import Sum
 
- 
 def calculate_round_score(match, participant, round_num):
-    """Dynamically groups scores by time, then applies (A+B+C)/3."""
+    """
+    Groups scores strictly into sequential queues of 3, ignoring timestamps.
+    Works perfectly for both positive points and negative fouls.
+    """
     if not participant:
         return 0
         
-    # Get all unflagged scores for this round, ordered by time
-    scores_query = Score.objects.filter(match=match, participant=participant, round_num=round_num, is_flagged=False).order_by('timestamp')
+    # Get all unflagged scores for this round, ordered chronologically
+    scores_query = Score.objects.filter(
+        match=match, 
+        participant=participant, 
+        round_num=round_num, 
+        is_flagged=False
+    ).order_by('timestamp')
         
-    # Process Fouls (-3 points each)
-    fouls = scores_query.filter(is_foul=True).aggregate(Sum('points'))['points__sum'] or 0
-
-    # Process Points
+    # Separate the lists
     point_scores = list(scores_query.filter(is_foul=False))
-    if not point_scores:
-        return fouls
+    foul_scores = list(scores_query.filter(is_foul=True))
 
-    round_score = 0
-    current_sub_round_scores = []
-    last_time = point_scores[0].timestamp
+    # --- THE QUEUE ENGINE ---
+    def get_queue_total(score_list):
+        total = 0
+        
+        # Loop through the list, grabbing exactly 3 items at a time
+        for i in range(0, len(score_list), 3):
+            chunk = score_list[i:i+3]
+            
+            # STRICT RULE: Only calculate if the queue chunk has exactly 3 scores!
+            if len(chunk) == 3:
+                chunk_sum = sum(s.points for s in chunk)
+                total += math.floor(chunk_sum / 3.0)
+                
+        return total
+    # ------------------------
+
+    # Pass both lists through the queue engine
+    approved_points = get_queue_total(point_scores)
+    approved_fouls = get_queue_total(foul_scores)
     
-    # Dynamically group scores that happen around the same time
-    for score in point_scores:
-        time_diff = abs((score.timestamp - last_time).total_seconds())
-        
-        # If more than 5 seconds pass between submissions, we treat it as a new sub-round
-        if time_diff > 5.0:
-            # Calculate the previous sub-round average (A+B+C)/3
-            sr_total = sum(s.points for s in current_sub_round_scores)
-            round_score += math.floor(sr_total / 3.0)
-            
-            # Reset for the new sub-round
-            current_sub_round_scores = []
-            
-        current_sub_round_scores.append(score)
-        last_time = score.timestamp
-        
-    # Don't forget to calculate the very last sub-round!
-    if current_sub_round_scores:
-        sr_total = sum(s.points for s in current_sub_round_scores)
-        round_score += math.floor(sr_total / 3.0)
-            
-    return round_score + fouls
+    return approved_points + approved_fouls
 
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -917,40 +944,81 @@ def advance_sub_round(request, match_id):
     return redirect('judge-live-match', match_id=match.id)
  
  
- 
-from django.shortcuts import redirect
-from django.contrib import messages
+from django.shortcuts import render, get_object_or_404
+from .models import Match, Tournament
 
+# 1. THE MASTER LIST VIEW
 def global_fixtures(request):
-    """Displays a master list of all fixtures with filtering capabilities."""
+    matches = Match.objects.all()
     
-    # Grab all tournaments for the filter dropdown
-    tournaments = Tournament.objects.all().order_by('-id')
-    
-    # Start with all matches, optimized with select_related for speed
-    matches = Match.objects.select_related(
-        'tournament', 'participant_red', 'participant_blue'
-    ).order_by('-tournament__id', 'ring_number', 'round_number', 'match_sequence')
-    
-    # --- BACKEND FILTERING ---
-    selected_tournament = request.GET.get('tournament')
-    if selected_tournament:
-        matches = matches.filter(tournament_id=selected_tournament)
-        
-    status_filter = request.GET.get('status')
-    if status_filter == 'completed':
-        matches = matches.filter(is_completed=True)
-    elif status_filter == 'pending':
-        matches = matches.filter(is_completed=False)
+    # Apply Filters
+    if request.GET.get('tournament'):
+        matches = matches.filter(tournament_id=request.GET.get('tournament'))
+    if request.GET.get('event_type'):
+        matches = matches.filter(event_type=request.GET.get('event_type'))
+    if request.GET.get('gender'):
+        matches = matches.filter(gender=request.GET.get('gender'))
+    if request.GET.get('weight_category'):
+        matches = matches.filter(weight_category=request.GET.get('weight_category'))
+    if request.GET.get('age_category'):
+        matches = matches.filter(age_category=request.GET.get('age_category'))
+    if request.GET.get('ring_number'):
+        matches = matches.filter(ring_number=request.GET.get('ring_number'))
+
+    matches = matches.order_by('round_number', 'match_sequence')
+    tournaments = Tournament.objects.all()
 
     return render(request, 'global_fixtures.html', {
-        'tournaments': tournaments,
         'matches': matches,
-        'selected_tournament': int(selected_tournament) if selected_tournament and selected_tournament.isdigit() else '',
-        'status_filter': status_filter,
+        'tournaments': tournaments,
     })
+
+from django.shortcuts import render, get_object_or_404, redirect
+from .models import Match, Tournament
+
+# 1. NEW: The Ring Selection Interceptor Page
+def select_ring(request, tournament_id):
+    tournament = get_object_or_404(Tournament, id=tournament_id)
     
+    if request.method == 'POST':
+        # Save the selected ring to the user's session
+        ring_number = request.POST.get('ring_number')
+        request.session['selected_ring'] = ring_number
+        return redirect('tournament-matches', tournament_id=tournament.id)
+        
+    return render(request, 'select_ring.html', {'tournament': tournament})
+
+# 2. UPDATED: The Tournament Fixtures Page
+def tournament_matches(request, tournament_id):
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    matches = Match.objects.filter(tournament=tournament)
     
+    # Check if they have a ring in their session. If not, bounce them to the selection page!
+    session_ring = request.session.get('selected_ring')
+    if not session_ring:
+        return redirect('select-ring', tournament_id=tournament.id)
+        
+    # Auto-filter by the session ring
+    matches = matches.filter(ring_number=session_ring)
+
+    # Apply remaining GET filters (Notice Ring is removed!)
+    if request.GET.get('event_type'):
+        matches = matches.filter(event_type=request.GET.get('event_type'))
+    if request.GET.get('gender'):
+        matches = matches.filter(gender=request.GET.get('gender'))
+    if request.GET.get('weight_category'):
+        matches = matches.filter(weight_category=request.GET.get     ('weight_category'))   
+    if request.GET.get('age_category'):
+        matches = matches.filter(age_category=request.GET.get('age_category'))
+
+    matches = matches.order_by('round_number', 'match_sequence')
+
+    return render(request, 'tournament_matches.html', {
+        'tournament': tournament,
+        'matches': matches,
+        'current_filters': request.GET,
+        'session_ring': session_ring, # Pass the ring to the template so we can display it
+    })
 def match_summary(request, match_id):
     """Displays the final detailed scoreboard for a completed match."""
     match = get_object_or_404(Match, id=match_id)
@@ -980,4 +1048,156 @@ def match_summary(request, match_id):
         'total_red': total_red,
         'total_blue': total_blue,
         'round_summary': round_summary,
+    })
+    
+    
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from .models import District, Participant # Make sure Participant is imported!
+# --- COACH PORTAL VIEWS ---
+
+def district_login_coach(request):
+    # Bypass if already logged in
+    if request.session.get('coach_district'):
+        return redirect('manage-participants-coach')
+
+    if request.method == 'POST':
+        district_id = request.POST.get('district_id')
+        code = request.POST.get('access_code')
+        
+        try:
+            district = District.objects.get(id=district_id)
+            if district.access_code == code:
+                request.session['coach_district'] = district.name
+                messages.success(request, f"Welcome, Coach from {district.name}!")
+                return redirect('manage-participants-coach')
+            else:
+                messages.error(request, "Incorrect Access Code. Please try again.")
+        except District.DoesNotExist:
+            messages.error(request, "Invalid District selected.")
+
+    districts = District.objects.all().order_by('name')
+    return render(request, 'district_login_coach.html', {'districts': districts})
+
+
+def manage_participants_coach(request):
+    district_name = request.session.get('coach_district')
+    if not district_name:
+        messages.warning(request, "You must log in to view participants.")
+        return redirect('district-login-coach')
+        
+    participants = Participant.objects.filter(district=district_name).order_by('name')
+    
+    return render(request, 'manage_participants_coach.html', {
+        'district_name': district_name,
+        'participants': participants
+    })
+
+
+def add_participant_coach(request):
+    district_name = request.session.get('coach_district')
+    if not district_name:
+        messages.error(request, "Unauthorized access. Please log in first.")
+        return redirect('district-login-coach')
+
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        dob = request.POST.get('dob')
+        age = request.POST.get('age')
+        gender = request.POST.get('gender')
+        contact = request.POST.get('contact')
+        
+        # THE FIX: Grab 'age_group' from the form, but save it to the DB as 'age_category'!
+        age_category_val = request.POST.get('age_group') 
+        weight_category = request.POST.get('weight_category')
+        event_type = request.POST.get('event_type')
+
+        Participant.objects.create(
+            name=name,
+            date_of_birth=dob,
+            age=age,
+            gender=gender,
+            contact=contact,
+            age_category=age_category_val, # FIXED HERE!
+            weight_category=weight_category,
+            event_type=event_type,
+            district=district_name 
+        )
+
+        messages.success(request, f"Successfully added {name} to {district_name}!")
+        return redirect('manage-participants-coach')
+
+    return render(request, 'add_participant_coach.html', {'district_name': district_name})
+
+
+def district_logout_coach(request):
+    if 'coach_district' in request.session:
+        del request.session['coach_district']
+    messages.info(request, "You have been logged out safely.")
+    return redirect('district-login-coach')
+ 
+from django.shortcuts import render, redirect, get_object_or_404
+# ... your other imports ...
+
+def edit_participant_coach(request, participant_id):
+    district_name = request.session.get('coach_district')
+    if not district_name:
+        messages.error(request, "Unauthorized access. Please log in first.")
+        return redirect('district-login-coach')
+
+    # SECURITY: Fetch the participant AND ensure they belong to this specific district!
+    participant = get_object_or_404(Participant, id=participant_id, district=district_name)
+
+    if request.method == 'POST':
+        participant.name = request.POST.get('name')
+        participant.date_of_birth = request.POST.get('dob')
+        participant.age = request.POST.get('age')
+        participant.gender = request.POST.get('gender')
+        participant.contact = request.POST.get('contact')
+        participant.age_category = request.POST.get('age_group') # Maps to your DB field
+        participant.weight_category = request.POST.get('weight_category')
+        participant.event_type = request.POST.get('event_type')
+        
+        participant.save()
+
+        messages.success(request, f"Successfully updated {participant.name}.")
+        return redirect('manage-participants-coach')
+
+    return render(request, 'edit_participant_coach.html', {
+        'district_name': district_name,
+        'participant': participant
+    })
+
+
+def delete_participant_coach(request, participant_id):
+    district_name = request.session.get('coach_district')
+    if not district_name:
+        messages.error(request, "Unauthorized access. Please log in first.")
+        return redirect('district-login-coach')
+
+    # SECURITY: Fetch the participant AND ensure they belong to this specific district!
+    participant = get_object_or_404(Participant, id=participant_id, district=district_name)
+
+    if request.method == 'POST':
+        name_to_delete = participant.name
+        participant.delete()
+        messages.success(request, f"Successfully removed {name_to_delete} from the team.")
+        return redirect('manage-participants-coach')
+
+    return render(request, 'delete_participant_coach.html', {
+        'district_name': district_name,
+        'participant': participant
+    })
+    
+    
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from .models import Match
+
+def check_match_status(request, match_id):
+    """A lightweight endpoint for the scorer's phone to ping."""
+    match = get_object_or_404(Match, id=match_id)
+    
+    return JsonResponse({
+        'is_completed': match.is_completed
     })

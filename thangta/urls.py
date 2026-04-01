@@ -13,13 +13,13 @@ urlpatterns = [
     path('participants/', ParticipantListView.as_view(), name='participant-list'),
     path('tournaments/dashboard/', TournamentDashboardView.as_view(), name='tournament-dashboard'),
     path('participants/add/', ParticipantCreateView.as_view(), name='participant-add'),
-    
+    path('tournaments/<int:tournament_id>/select-ring/',select_ring, name='select-ring'),
     path('officials/add/', OfficialCreateView.as_view(), name='official-add'),
     path('tournaments/<int:tournament_id>/end/', end_tournament, name='tournament-end'),
     path('participants/<int:pk>/edit/', ParticipantUpdateView.as_view(), name='participant-edit'),
     path('participants/<int:pk>/delete/', ParticipantDeleteView.as_view(), name='participant-delete'),
    path('fixtures/', global_fixtures, name='global-fixtures'),   # path('tournaments/<int:tournament_id>/fixtures/', manage_fixtures, name='manage-fixtures'),
-    # path('tournaments/<int:tournament_id>/matches/', tournament_matches, name='tournament-matches'),
+    path('tournaments/<int:tournament_id>/matches/', tournament_matches, name='tournament-matches'),
     
     path('matches/<int:match_id>/update/', update_match_winner, name='match-update'),
     path('',TournamentDashboardView.as_view(), name='tournament-dashboard'),
@@ -63,4 +63,12 @@ urlpatterns = [
     
     path('match/<int:match_id>/summary/', match_summary, name='match-summary'),
     
+ path('coach/login/', district_login_coach, name='district-login-coach'),
+path('coach/participants/', manage_participants_coach, name='manage-participants-coach'),
+path('coach/participants/add/', add_participant_coach, name='add-participant-coach'),
+path('coach/logout/', district_logout_coach, name='district-logout-coach'),
+path('coach/participants/<int:participant_id>/edit/', edit_participant_coach, name='edit-participant-coach'),
+path('coach/participants/<int:participant_id>/delete/', delete_participant_coach, name='delete-participant-coach'),
+
+path('match/<int:match_id>/status/', check_match_status, name='check-match-status'),
 ]

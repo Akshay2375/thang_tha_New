@@ -1,84 +1,103 @@
-{% load widget_tweaks %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Manage Fixtures - {{ tournament.name }}</title>
+    <title>Generate Fixtures - {{ tournament.name }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light p-4">
 
-<div class="container">
+{% include 'partials/navbar.html' %}
+
+<div class="container max-w-4xl mx-auto" style="max-width: 900px;">
+    
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold m-0">Generate Fixtures</h2>
-            <p class="text-muted m-0">{{ tournament.name }}</p>
+            <h2 class="fw-bold m-0">⚙️ Generate Fixtures</h2>
+            <p class="text-muted fs-5 m-0">{{ tournament.name }}</p>
         </div>
-        <a href="{% url 'tournament-dashboard' %}" class="btn btn-outline-dark">← Back to Dashboard</a>
+        <a href="{% url 'tournament-matches' tournament.id %}" class="btn btn-outline-dark shadow-sm">← Back to Fixtures</a>
     </div>
 
-    {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        {% endfor %}
-    {% endif %}
-
     <div class="row">
-        <div class="col-md-5">
-            <div class="card shadow-sm border-primary">
-                <div class="card-header bg-primary text-white fw-bold">
-                    ⚙️ Setup Bracket Category
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+                <div class="card-header bg-primary text-white py-3 border-0">
+                    <h5 class="m-0 fw-bold">Setup Bracket Category</h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-4 bg-white">
                     <form method="POST">
                         {% csrf_token %}
                         
                         <div class="mb-3">
-                            <label class="form-label fw-bold text-muted small">{{ form.event_type.label }}</label>
-                            {{ form.event_type|add_class:"form-select" }}
+                            <label class="form-label text-muted small fw-bold">Tournament</label>
+                            <input type="text" class="form-control fw-bold bg-light" value="{{ tournament.name }}" disabled>
                         </div>
+
                         <div class="mb-3">
-                            <label class="form-label fw-bold text-muted small">{{ form.gender.label }}</label>
-                            {{ form.gender|add_class:"form-select" }}
+                            <label class="form-label text-muted small fw-bold">Event Type</label>
+                            <select name="event_type" class="form-select" required>
+                                <option value="" disabled selected>Select Event</option>
+                                <option value="Phunaba-Ama">Phunaba-Ama</option>
+                                <option value="Phunaba-Anishuba">Phunaba-Anishuba</option>
+                            </select>
                         </div>
+
                         <div class="mb-3">
-                            <label class="form-label fw-bold text-muted small">{{ form.age_category.label }}</label>
-                            {{ form.age_category|add_class:"form-select" }}
+                            <label class="form-label text-muted small fw-bold">Gender</label>
+                            <select name="gender" class="form-select" required>
+                                <option value="" disabled selected>Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
                         </div>
+
                         <div class="mb-3">
-                            <label class="form-label fw-bold text-muted small">{{ form.weight_category.label }}</label>
-                            {{ form.weight_category|add_class:"form-select" }}
+                            <label class="form-label text-muted small fw-bold">Age Category</label>
+                            <select name="age_category" class="form-select" required>
+                                <option value="" disabled selected>Select Age Group</option>
+                                <option value="U14">Under 14</option>
+                                <option value="U18">Under 18</option>
+                                <option value="O18">Over 18</option>
+                            </select>
                         </div>
-                        <hr>
-                        <div class="mb-4">
-                            <label class="form-label fw-bold text-dark">{{ form.ring_number.label }}</label>
-                            {{ form.ring_number|add_class:"form-control border-dark" }}
-                            <small class="text-muted">{{ form.ring_number.help_text }}</small>
+
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Weight Category</label>
+                            <select name="weight_category" class="form-select" required>
+                                <option value="" disabled selected>Select Weight</option>
+                                <option value="-21">-21 Kg</option>
+                                <option value="-25">-25 Kg</option>
+                                <option value="-29">-29 Kg</option>
+                                <option value="-33">-33 Kg</option>
+                                <option value="-37">-37 Kg</option>
+                                <option value="-40">-40 Kg</option>
+                                <option value="-41">-41 Kg</option>
+                                <option value="-44">-44 Kg</option>
+                                <option value="-45">-45 Kg</option>
+                                <option value="-49">-49 Kg</option>
+                                <option value="-52">-52 Kg</option>
+                                <option value="-53">-53 Kg</option>
+                                <option value="-56">-56 Kg</option>
+                                <option value="-75">-75 Kg</option>
+                                <option value="+53">+53 Kg</option>
+                            </select>
                         </div>
-                        
-                      <button type="submit" class="btn btn-success w-100 fw-bold py-2">⚡ Generate Fixtures / Next Round</button>  
+
+                      <div class="mb-3">
+    <label class="form-label fw-bold text-muted small">Assign to Ring Number</label>
+    
+    <input type="text" class="form-control" value="Ring {{ ring_number }}" readonly style="background-color: #f8f9fa; cursor: not-allowed;">
+    
+    <input type="hidden" name="ring_number" value="{{ ring_number }}">
+</div>
+
+                        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">Generate Round 1</button>
                     </form>
                 </div>
             </div>
         </div>
-        
-        <div class="col-md-7">
-            <div class="card shadow-sm border-0 bg-white">
-                <div class="card-body p-4">
-                    <h5 class="fw-bold">How this works:</h5>
-                    <ul class="text-muted mt-3" style="line-height: 1.8;">
-                        <li>Select the exact category criteria on the left.</li>
-                        <li>The system will find all eligible athletes registered for this specific tournament.</li>
-                        <li>It will <strong>randomly shuffle</strong> them to ensure fair matchups.</li>
-                        <li>If there is an odd number of athletes, one will automatically receive a <strong>BYE</strong> and advance to Round 2.</li>
-                        <li>Matches will be generated and assigned to the Ring Number you specify.</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
+ 
     </div>
 </div>
 

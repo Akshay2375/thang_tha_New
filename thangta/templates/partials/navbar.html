@@ -1,35 +1,63 @@
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4" style="border-bottom: 3px solid #dc3545;">
+<nav class="navbar navbar-expand-lg navbar-dark shadow-sm mb-4" style="background-color: #1e293b;">
     <div class="container-fluid px-4">
-        <a class="navbar-brand fw-bold text-uppercase tracking-wide" href="#">
-            🥋 Thang-Ta
+        
+        <a class="navbar-brand fw-bold" href="{% url 'tournament-dashboard' %}">
+            🥋 Thang-Ta Manager
         </a>
-
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+        
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar">
             <span class="navbar-toggler-icon"></span>
         </button>
-
+        
         <div class="collapse navbar-collapse" id="mainNavbar">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-2">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0 fw-semibold">
                 <li class="nav-item">
-                    <a class="nav-link fw-semibold" href="{% url 'tournament-dashboard' %}">Dashboard</a>
+                    <a class="nav-link" href="{% url 'tournament-dashboard' %}">Dashboard</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link fw-semibold" href="{% url 'participant-list' %}">All Participants</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link fw-semibold" href="{% url 'global-fixtures' %}">Fixtures</a>
+                    <a class="nav-link" href="{% url 'global-fixtures' %}">Master Fixtures</a>
                 </li>
             </ul>
-
-            <div class="d-flex align-items-center gap-3 mt-2 mt-lg-0">
-                <div class="text-light text-end d-none d-lg-block">
-                    <small class="text-muted d-block" style="font-size: 0.75rem; margin-bottom: -4px;">LOGGED IN AS</small>
-                    <span class="fw-bold text-uppercase">{{ request.user.username }}</span>
-                </div>
-                <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm fw-bold px-3">
-                    Logout
+            
+            <div class="d-flex align-items-center gap-3">
+                
+                <a href="{% url 'district-login-coach' %}" class="btn btn-warning btn-sm fw-bold px-3 shadow-sm text-dark" style="border: none;">
+                    🛡️ Coaches Portal
                 </a>
+
+                {% if request.user.is_authenticated %}
+                    <span class="text-light opacity-75 small border-start border-secondary ps-3 ms-1">
+                        👤 {{ request.user.username }} 
+                    </span>
+                    <a href="/logout/" class="btn btn-outline-light btn-sm fw-bold px-3">Logout</a>
+                {% endif %}
+                
             </div>
         </div>
     </div>
 </nav>
+
+{% if messages %}
+<div class="container position-relative z-3">
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm fw-bold" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let alerts = document.querySelectorAll('.alert');
+        alerts.forEach(function(alert) {
+            setTimeout(function() {
+                if (typeof bootstrap !== 'undefined') {
+                    let bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }
+            }, 4000); 
+        });
+    });
+</script>
+{% endif %}
