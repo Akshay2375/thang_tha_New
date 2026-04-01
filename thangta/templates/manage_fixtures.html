@@ -9,6 +9,39 @@
 
 {% include 'partials/navbar.html' %}
 
+{% if messages %}
+<div class="container mt-3 mb-4">
+    {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show shadow-sm fw-bold border-0" role="alert">
+            {% if message.tags == 'success' %}
+                ✅ 
+            {% elif message.tags == 'error' %}
+                🛑 
+            {% else %}
+                ℹ️ 
+            {% endif %}
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+</div>
+
+<script>
+    // Auto-hide success messages after 4 seconds (leave errors on screen so they can read them)
+    document.addEventListener('DOMContentLoaded', function() {
+        let alerts = document.querySelectorAll('.alert-success'); 
+        alerts.forEach(function(alert) {
+            setTimeout(function() {
+                if (typeof bootstrap !== 'undefined') {
+                    let bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }
+            }, 4000); 
+        });
+    });
+</script>
+{% endif %}
+
 <div class="container max-w-4xl mx-auto" style="max-width: 900px;">
     
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -84,20 +117,28 @@
                             </select>
                         </div>
 
-                      <div class="mb-3">
-    <label class="form-label fw-bold text-muted small">Assign to Ring Number</label>
-    
-    <input type="text" class="form-control" value="Ring {{ ring_number }}" readonly style="background-color: #f8f9fa; cursor: not-allowed;">
-    
-    <input type="hidden" name="ring_number" value="{{ ring_number }}">
-</div>
+                        <div class="mb-4">
+                            <label class="form-label text-muted small fw-bold">Assign to Ring Number</label>
+                            <select name="ring_number" class="form-select fw-bold" required>
+                                <option value="" {% if not prefilled_ring %}selected{% endif %} disabled>Select Ring</option>
+                                <option value="1" {% if prefilled_ring|stringformat:"s" == '1' %}selected{% endif %}>Ring 1</option>
+                                <option value="2" {% if prefilled_ring|stringformat:"s" == '2' %}selected{% endif %}>Ring 2</option>
+                                <option value="3" {% if prefilled_ring|stringformat:"s" == '3' %}selected{% endif %}>Ring 3</option>
+                                <option value="4" {% if prefilled_ring|stringformat:"s" == '4' %}selected{% endif %}>Ring 4</option>
+                            </select>
+                            
+                            {% if prefilled_ring %}
+                                <div class="form-text text-success small fw-bold mt-1">
+                                    ✨ Auto-selected based on your current ring.
+                                </div>
+                            {% endif %}
+                        </div>
 
-                        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">Generate Round 1</button>
+                        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">Generate Bracket</button>
                     </form>
                 </div>
             </div>
         </div>
- 
     </div>
 </div>
 

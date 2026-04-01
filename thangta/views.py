@@ -59,6 +59,7 @@ def tournament_results(request, tournament_id):
         is_completed=True
     ).order_by('event_type', 'gender', 'age_category', 'weight_category', '-round_number')
     
+    
     return render(request, 'tournament_results.html', {
         'tournament': tournament,
         'completed_matches': completed_matches
@@ -73,6 +74,7 @@ class TournamentListView(AdminRequiredMixin, ListView):
     model = Tournament
     template_name = 'tournament_list.html'
     context_object_name = 'tournaments'
+    pagination_class = None
     
 class TournamentCreateView(AdminRequiredMixin, CreateView):
     model = Tournament
@@ -93,20 +95,65 @@ class TournamentDeleteView(AdminRequiredMixin, DeleteView):
     success_url = reverse_lazy('tournament-list')
 
 
-
+from django.shortcuts import redirect
 from .permissions import *
+# (Keep your existing imports)
+from django.shortcuts import redirect
+# Keep your existing imports...
+
 class ParticipantListView(AdminOrJudgeRequiredMixin, ListView):
     model = Participant
     template_name = 'participant_list.html'
     context_object_name = 'participants'
-    paginate_by = 10
+
+    def get(self, request, *args, **kwargs):
+        # 1. HANDLE THE CLEAR BUTTON
+        if request.GET.get('clear') == 'true':
+            keys = ['f_age', 'f_gender', 'f_district', 'f_event', 'f_weight']
+            for key in keys:
+                request.session.pop(key, None)
+            # Strip the ?clear=true from the URL so it doesn't get stuck in a loop
+            return redirect(request.path)
+            
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        self.filter_form = ParticipantFilterForm(self.request.GET)
+        
+        # 1. THE ROBUST CHECK 
+        # Instead of looking for a hidden 'action' input, just check if ANY filter parameters are in the URL!
+        filter_keys = ['age_group', 'gender', 'district', 'event_type', 'weight_category']
+        is_filtering = any(key in self.request.GET for key in filter_keys)
+        
+        if is_filtering:
+            form_data = self.request.GET
+            
+            # Save the raw choices into the session memory
+            self.request.session['f_age'] = self.request.GET.get('age_group', '')
+            self.request.session['f_gender'] = self.request.GET.get('gender', '')
+            self.request.session['f_district'] = self.request.GET.get('district', '')
+            self.request.session['f_event'] = self.request.GET.get('event_type', '')
+            self.request.session['f_weight'] = self.request.GET.get('weight_category', '')
+        else:
+            # Rebuild the form data from the session memory
+            form_data = {
+                'age_group': self.request.session.get('f_age', ''),
+                'gender': self.request.session.get('f_gender', ''),
+                'district': self.request.session.get('f_district', ''),
+                'event_type': self.request.session.get('f_event', ''),
+                'weight_category': self.request.session.get('f_weight', ''),
+            }
+
+        # Bind the data to the form so the HTML dropdowns stay visually selected!
+        self.filter_form = ParticipantFilterForm(form_data)
+
+        # Force all fields to be optional so is_valid() NEVER fails on empty dropdowns
+        for field_name, field in self.filter_form.fields.items():
+            field.required = False
 
         if self.filter_form.is_valid():
             data = self.filter_form.cleaned_data
+            
             if data.get('age_group'):
                 queryset = queryset.filter(age_category=data['age_group'])
             if data.get('gender'):
@@ -122,16 +169,18 @@ class ParticipantListView(AdminOrJudgeRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        # Pass the processed form to the HTML
         context['filter_form'] = self.filter_form
         return context
 
-class ParticipantCreateView(AdminRequiredMixin, CreateView):
+
+class ParticipantCreateView(AdminOrJudgeRequiredMixin, CreateView):
     model = Participant
     fields = ['tournament', 'name', 'actual_age', 'gender', 'contact', 'district', 'district_code', 'event_type', 'age_category', 'weight_category']
     template_name = 'participant_form.html'
     success_url = reverse_lazy('participant-list')
 
-class ParticipantUpdateView(AdminRequiredMixin, UpdateView):
+class ParticipantUpdateView(AdminOrJudgeRequiredMixin, UpdateView):
     model = Participant
     fields = ['tournament', 'name', 'actual_age', 'gender', 'contact', 'district', 'district_code', 'event_type', 'age_category', 'weight_category']
     template_name = 'participant_form.html'
@@ -142,7 +191,7 @@ class ParticipantUpdateView(AdminRequiredMixin, UpdateView):
         context['is_update'] = True 
         return context
 
-class ParticipantDeleteView(AdminRequiredMixin, DeleteView):
+class ParticipantDeleteView(AdminOrJudgeRequiredMixin, DeleteView):
     model = Participant
     template_name = 'participant_confirm_delete.html'
     success_url = reverse_lazy('participant-list')
@@ -572,10 +621,13 @@ def manage_fixtures(request, tournament_id):
     """Allows Admins and Judges to generate brackets using the services algorithms."""
     tournament = get_object_or_404(Tournament, id=tournament_id)
     
+    prefilled_ring = request.session['selected_ring']
     if request.method == 'POST':
         form = FixtureGenerationForm(request.POST)
+        
         if form.is_valid():
             data = form.cleaned_data
+            prefilled_ring = data['ring_number']
             
             # 1. Check if ANY matches already exist for this exact category
             existing_matches = Match.objects.filter(
@@ -587,48 +639,42 @@ def manage_fixtures(request, tournament_id):
             )
             
             if existing_matches.exists():
-                # ROUND 2+ LOGIC: Matches exist, so we are generating the NEXT round
                 latest_round = existing_matches.order_by('-round_number').first().round_number
-                
                 success, msg = generate_next_round(
-                    tournament=tournament,
-                    event_type=data['event_type'],
-                    age_category=data['age_category'],
-                    weight_category=data['weight_category'],
-                    gender=data['gender'],
-                    current_round=latest_round,
+                    tournament=tournament, event_type=data['event_type'],
+                    age_category=data['age_category'], weight_category=data['weight_category'],
+                    gender=data['gender'], current_round=latest_round,
                     ring_number=data['ring_number']
                 )
             else:
-                # ROUND 1 LOGIC: No matches exist, generate the initial bracket
                 success, msg = generate_round_one_fixtures(
-                    tournament=tournament,
-                    event_type=data['event_type'],
-                    age_category=data['age_category'],
-                    weight_category=data['weight_category'],
-                    gender=data['gender'],
-                    ring_number=data['ring_number']
+                    tournament=tournament, event_type=data['event_type'],
+                    age_category=data['age_category'], weight_category=data['weight_category'],
+                    gender=data['gender'], ring_number=data['ring_number']
                 )
                 
-            # Flash the success or error message from your services.py file
             if success:
                 messages.success(request, msg)
-                return redirect('global-fixtures', tournament_id=tournament.id)
+                return redirect('tournament-matches', tournament_id=tournament.id)
             else:
                 messages.error(request, msg)
                 return redirect('manage-fixtures', tournament_id=tournament.id)
+        
+        # THE FIX: If the form is invalid, tell the user WHY!
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"Error in {field}: {error}")
                 
     else:
-        # GET REQUEST: Show the empty form
         form = FixtureGenerationForm()
+    
 
     return render(request, 'manage_fixtures.html', {
         'tournament': tournament,
-        'form': form
+        'form': form,
+        'prefilled_ring': prefilled_ring,
     })
-    
-    
-    
     
 # thangta/views.py
 from .permissions import scorer_required

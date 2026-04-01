@@ -54,49 +54,48 @@
 
     <div class="card shadow-sm">
         <div class="card-body p-0 table-responsive">
-            <table class="table table-hover table-striped m-0 align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th class="small text-muted px-3">#</th>
-                        <th class="small text-muted">NAME</th>
-                        <th class="small text-muted">AGE</th>
-                        <th class="small text-muted">GENDER</th>
-                        <th class="small text-muted">DISTRICT</th>
-                        <th class="small text-muted">CONTACT</th>
-                        <th class="small text-muted">AGE GROUP</th>
-                        <th class="small text-muted">WEIGHT CATEGORY</th>
-                        <th class="small text-muted">EVENT TYPE</th>
-                        <th class="small text-muted text-center px-3">ACTIONS</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for participant in participants %}
-                    <tr>
-                        <td class="px-3 text-muted">{{ forloop.counter }}</td>
-                        <td class="fw-bold">{{ participant.name }}</td>
-                        <td>{{ participant.actual_age }}</td>
-                        <td>{{ participant.gender }}</td>
-                        <td>{{ participant.district }}</td>
-                        <td>{{ participant.contact }}</td>
-                        <td>{{ participant.get_age_category_display }}</td> 
-                        <td>{{ participant.weight_category }}</td>
-                        <td>{{ participant.event_type }}</td>
-                        <td class="text-center px-3 small">
-                            <a href="{% url 'participant-edit' participant.id %}" class="btn btn-sm btn-outline-primary me-1">Edit</a>
-                                                
-                            <a href="{% url 'participant-delete' participant.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
-                                            </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="10" class="text-center text-muted p-5">
-                            <p class="h5 mt-3">No participants found.</p>
-                            <p class="small m-0 mb-3">Adjust your filters or add a new participant.</p>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+           <table class="table table-hover table-striped m-0 align-middle">
+    <thead class="table-dark">
+        <tr>
+            <th class="small text-white px-3 py-3 border-0">#</th>
+            <th class="small text-white py-3 border-0">NAME</th>
+            <th class="small text-white py-3 border-0">AGE</th>
+            <th class="small text-white py-3 border-0">GENDER</th>
+            <th class="small text-white py-3 border-0">DISTRICT</th>
+            <th class="small text-white py-3 border-0">CONTACT</th>
+            <th class="small text-white py-3 border-0">AGE GROUP</th>
+            <th class="small text-white py-3 border-0">WEIGHT CATEGORY</th>
+            <th class="small text-white py-3 border-0">EVENT TYPE</th>
+            <th class="small text-white text-center px-3 py-3 border-0">ACTIONS</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for participant in participants %}
+        <tr>
+            <td class="px-3 text-muted">{{ forloop.counter }}</td>
+            <td class="fw-bold">{{ participant.name }}</td>
+            <td>{{ participant.actual_age }}</td>
+            <td>{{ participant.gender }}</td>
+            <td>{{ participant.district }}</td>
+            <td>{{ participant.contact }}</td>
+            <td>{{ participant.get_age_category_display }}</td> 
+            <td>{{ participant.weight_category }}</td>
+            <td>{{ participant.event_type }}</td>
+            <td class="text-center px-3 small">
+                <a href="{% url 'participant-edit' participant.id %}" class="btn btn-sm btn-outline-primary me-1 fw-bold">Edit</a>
+                <a href="{% url 'participant-delete' participant.id %}" class="btn btn-sm btn-outline-danger fw-bold">Delete</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="10" class="text-center text-muted p-5">
+                <p class="h5 mt-3 fw-bold">No participants found.</p>
+                <p class="small m-0 mb-3">Adjust your filters or add a new participant.</p>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
         </div>
     </div>
 
