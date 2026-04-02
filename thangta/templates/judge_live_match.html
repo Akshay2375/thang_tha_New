@@ -17,8 +17,6 @@
 <body class="text-white p-4 d-flex flex-column" style="min-height: 100vh;">
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-   
-    
     <div class="text-center">
         <h3 class="m-0 text-warning fw-bold">🔴 LIVE - RING {{ match.ring_number }}</h3>
         <span class="text-light opacity-75 fs-5">{{ match.full_category_name }}</span>
@@ -68,22 +66,39 @@
     {% endif %}
 </div>
 
-<div id="round-summary-container">
-    <div class="text-center text-muted py-2 fst-italic">Loading round summary...</div>
-</div>
+<div class="row g-4 mb-5">
+    <div class="col-md-6">
+        <h5 class="fw-bold text-danger mb-2">🔴 Red Corner Activity</h5>
+        <div class="table-responsive bg-white rounded shadow-sm">
+            <table class="table table-bordered text-center mb-0" id="matrix-red">
+                <thead class="bg-light">
+                    <tr id="matrix-red-header">
+                        <th>Scorer</th>
+                        </tr>
+                </thead>
+                <tbody id="matrix-red-body">
+                    <tr><td class="text-muted fst-italic p-4">Awaiting connection...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-<div id="score-feed-container" class="feed-container mb-4 bg-white rounded shadow-sm">
-    <div class="text-center text-muted py-4 fst-italic">Loading live feed...</div>
+    <div class="col-md-6">
+        <h5 class="fw-bold text-primary mb-2">🔵 Blue Corner Activity</h5>
+        <div class="table-responsive bg-white rounded shadow-sm">
+            <table class="table table-bordered text-center mb-0" id="matrix-blue">
+                <thead class="bg-light">
+                    <tr id="matrix-blue-header">
+                        <th>Scorer</th>
+                        </tr>
+                </thead>
+                <tbody id="matrix-blue-body">
+                    <tr><td class="text-muted fst-italic p-4">Awaiting connection...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
-
-<h5 class="fw-bold text-danger mb-2 px-1 mt-4">
-    <img src="https://img.icons8.com/color/48/error--v1.png" alt="error" style="width: 24px; margin-right: 5px; vertical-align: text-bottom;"/>
-    Match Foul History
-</h5>
-<div id="foul-feed-container" class="feed-container mb-5 bg-white rounded shadow-sm" style="max-height: 250px;">
-    <div class="text-center text-muted py-4 fst-italic">Loading foul history...</div>
-</div>
-
 <div class="mt-auto text-center pb-2">
  <div class="d-flex justify-content-center gap-4 mt-4 mb-5">
     <form method="POST" action="{% url 'update-match-winner' match.id %}">
@@ -91,7 +106,7 @@
         <input type="hidden" name="winner_id" value="{{ match.participant_red.id }}">
         <button type="submit" class="btn text-white fw-bold shadow" 
                 style="background-color: #dc3545; border: none; font-size: 1.5rem; padding: 15px 40px; border-radius: 12px; min-width: 250px;">
-          {{ match.participant_blue.name }} Wins
+          {{ match.participant_red.name }} Wins
         </button>
     </form>
 
@@ -107,44 +122,148 @@
 </div>
 
 <script>
-  
- function fetchLiveData() {
-        fetch("{% url 'match-live-data' match.id %}")
-            .then(response => {
-                if (!response.ok) throw new Error("Backend Error");
-                return response.json();
-            })
-            .then(data => {
-                // THE FIX: Now using total_red and total_blue for the giant boxes
-                const rScore = document.getElementById('red-score');
-                if (rScore) rScore.innerText = data.total_red;
-                
-                const bScore = document.getElementById('blue-score');
-                if (bScore) bScore.innerText = data.total_blue;
+    const matchId = "{{ match.id }}";
+    const currentRound = parseInt("{{ match.current_round|default:'1' }}");
+    
+    // 1. Establish the persistent SSE Connection!
+    const evtSource = new EventSource("{% url 'match-sse-stream' match.id %}");
+    
+    evtSource.onmessage = function(event) {
+        // Ignore the silent heartbeat keeping the connection alive
+        if (event.data.trim() === ": heartbeat") return; 
 
-                const summaryContainer = document.getElementById('round-summary-container');
-                if (summaryContainer) summaryContainer.innerHTML = data.summary_html;
-                
-                const feedContainer = document.getElementById('score-feed-container');
-                if (feedContainer) feedContainer.innerHTML = data.feed_html;
-                
-                const foulContainer = document.getElementById('foul-feed-container');
-                if (foulContainer) foulContainer.innerHTML = data.foul_html;
-            })
-            .catch(error => console.error('Error fetching live data:', error));
-    }
-    function toggleFlag(scoreId) {
-        fetch(`/judge/score/${scoreId}/flag/`, {
+        const payload = JSON.parse(event.data);
+        console.log("Live Update Received:", payload.type);
+        
+        if (payload.state) {
+            renderMatrix(payload.state);
+        }
+    };
+
+    evtSource.onerror = function(err) {
+        console.error("SSE Connection lost. Reconnecting...", err);
+    };
+
+    // 2. The function that allows the Judge to click a score to flag it
+    function flagScore(subround, corner, scorerId) {
+        fetch("{% url 'flag-live-score' match.id %}", {
             method: 'POST',
-            headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' }
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                round_num: currentRound,
+                subround: subround,
+                corner: corner,
+                scorer_id: scorerId
+            })
         })
         .then(response => response.json())
-        .then(data => { if (data.status === 'success') { fetchLiveData(); } })
-        .catch(error => console.error('Error:', error));
+        .then(data => {
+            if (data.status !== 'success') {
+                alert("Could not flag score: " + data.message);
+            }
+        });
     }
 
-    fetchLiveData();
-    setInterval(fetchLiveData, 500); 
+    // 3. The Matrix Rendering Engine
+    // 3. The Matrix Rendering Engine
+    function renderMatrix(state) {
+        const roundData = state[currentRound];
+        if (!roundData || !roundData.subrounds) return;
+
+        const subrounds = roundData.subrounds;
+        
+        // Find how many subrounds exist to build the columns
+        const srKeys = Object.keys(subrounds).map(Number).sort((a, b) => a - b);
+        const maxSr = srKeys.length > 0 ? srKeys[srKeys.length - 1] : 1;
+
+        let totalRedFloor = 0;
+        let totalBlueFloor = 0;
+
+        ['red', 'blue'].forEach(corner => {
+            let headerHtml = `<th class="bg-light text-dark">Scorer</th>`;
+            let bodyHtml = '';
+            
+            // Collect unique scorers for this corner
+            const scorerIds = new Set();
+            for (let i = 1; i <= maxSr; i++) {
+                // 🚨 NEW: Changed "SR" to "Subround"
+                headerHtml += `<th class="bg-light">Subround ${i}</th>`;
+                if (subrounds[i] && subrounds[i][corner]) {
+                    Object.keys(subrounds[i][corner].scorers).forEach(id => scorerIds.add(id));
+                    
+                    if (subrounds[i][corner].status === 'COMPLETE') {
+                        if (corner === 'red') totalRedFloor += subrounds[i][corner].final_score;
+                        if (corner === 'blue') totalBlueFloor += subrounds[i][corner].final_score;
+                    }
+                }
+            }
+
+            // Build the rows for each Scorer
+            Array.from(scorerIds).forEach(scorerId => {
+                // 🚨 NEW: Find the Scorer's actual name from the data payload
+                let displayName = `Scorer ${scorerId}`; // Fallback just in case
+                for (let i = 1; i <= maxSr; i++) {
+                    if (subrounds[i] && subrounds[i][corner] && subrounds[i][corner].scorers[scorerId]) {
+                        if (subrounds[i][corner].scorers[scorerId].name) {
+                            displayName = subrounds[i][corner].scorers[scorerId].name;
+                            break; 
+                        }
+                    }
+                }
+
+                // 🚨 NEW: Print the Scorer's Name
+                bodyHtml += `<tr><td class="fw-bold text-muted bg-light text-uppercase">${displayName}</td>`;
+                
+                for (let i = 1; i <= maxSr; i++) {
+                    const srState = subrounds[i] ? subrounds[i][corner] : null;
+                    const scorerData = (srState && srState.scorers) ? srState.scorers[scorerId] : null;
+
+                    if (scorerData) {
+                        let displayVal = scorerData.foul < 0 ? `<span class="badge bg-danger">FOUL (${scorerData.foul})</span>` : scorerData.score;
+                        let flagStyle = scorerData.flagged ? "text-decoration-line-through text-danger opacity-50 bg-warning" : "";
+                        
+                        bodyHtml += `
+                            <td class="fw-bold fs-5 ${flagStyle}" 
+                                style="cursor: pointer;" 
+                                onclick="flagScore(${i}, '${corner}', ${scorerId})"
+                                title="Click to flag/unflag">
+                                ${displayVal}
+                            </td>`;
+                    } else {
+                        bodyHtml += `<td class="text-muted opacity-25">⏳</td>`;
+                    }
+                }
+                bodyHtml += `</tr>`;
+            });
+
+            // Add the "FINAL AVERAGE" row at the bottom
+            bodyHtml += `<tr class="table-secondary">
+                <td class="fw-bold text-uppercase">Floor Avg</td>`;
+            for (let i = 1; i <= maxSr; i++) {
+                const srState = subrounds[i] ? subrounds[i][corner] : null;
+                if (srState && srState.status === 'COMPLETE') {
+                    let foulDisplay = srState.final_foul < 0 ? `<br><small class="text-danger">Foul: ${srState.final_foul}</small>` : '';
+                    bodyHtml += `<td class="fw-bold fs-4">${srState.final_score} ${foulDisplay}</td>`;
+                } else {
+                    bodyHtml += `<td class="text-muted fst-italic align-middle" style="font-size: 0.8rem;">Waiting...</td>`;
+                }
+            }
+            bodyHtml += `</tr>`;
+
+            document.getElementById(`matrix-${corner}-header`).innerHTML = headerHtml;
+            document.getElementById(`matrix-${corner}-body`).innerHTML = bodyHtml || `<tr><td colspan="${maxSr+1}" class="text-muted py-3">No scores yet</td></tr>`;
+        });
+
+        // Update the Giant Score Boxes
+        const rScore = document.getElementById('red-score');
+        if (rScore) rScore.innerText = totalRedFloor;
+        
+        const bScore = document.getElementById('blue-score');
+        if (bScore) bScore.innerText = totalBlueFloor;
+    }
 </script>
 </body>
 </html>

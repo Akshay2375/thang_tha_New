@@ -1,79 +1,33 @@
-<div class="row g-0 h-100">
-    <div class="col-6 border-end border-2 border-dark">
-        <table class="table table-hover m-0 align-middle text-center">
-            <thead class="bg-light" style="position: sticky; top: 0; z-index: 1;">
-                <tr>
-                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">ROUND</th>
-                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">SUB-ROUND</th>
-                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">SCORE</th>
-                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2">SCORER</th>
-                    <th class="small py-2 text-danger fw-bold border-bottom border-danger border-2 text-end pe-3">OVERRIDE</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white">
-                {% for score in red_scores %}
-                <tr class="{% if score.is_flagged %}flagged-row{% endif %}">
-                    <td class="fw-bold align-middle text-dark">{{ score.round_num }}</td>
-                    <td class="fw-bold align-middle text-dark">{{ score.display_sub_round }}</td>
-                    <td class="align-middle">
-                        {% if score.is_foul %}
-                            <span class="badge bg-danger py-1 px-2">{{ score.foul_reason }} (-3)</span>
-                        {% else %}
-                            <span class="badge bg-success py-1 px-2">+{{ score.points }} PT</span>
-                        {% endif %}
-                    </td>
-                    <td class="align-middle text-uppercase" style="color: #000000 !important; font-weight: 900 !important;">
-                        {{ score.scorer.username|default:"Unknown" }}
-                    </td>
-                    <td class="text-end align-middle pe-3">
-                        <button class="btn btn-sm btn-outline-danger fw-bold shadow-sm" onclick="toggleFlag({{ score.id }})">
-                            {% if score.is_flagged %}⟲ Unflag{% else %}🚩 Flag{% endif %}
-                        </button>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="5" class="text-center text-muted py-4 fst-italic">Waiting for Red Corner...</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <h5 class="fw-bold text-danger mb-2">🔴 Red Corner Activity</h5>
+        <div class="table-responsive bg-white rounded shadow-sm">
+            <table class="table table-bordered text-center mb-0" id="matrix-red">
+                <thead class="bg-light">
+                    <tr id="matrix-red-header">
+                        <th>Scorer</th>
+                        </tr>
+                </thead>
+                <tbody id="matrix-red-body">
+                    <tr><td class="text-muted fst-italic p-4">Awaiting connection...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <div class="col-6">
-        <table class="table table-hover m-0 align-middle text-center">
-            <thead class="bg-light" style="position: sticky; top: 0; z-index: 1;">
-                <tr>
-                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">ROUND</th>
-                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">SUB-ROUND</th>
-                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">SCORE</th>
-                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2">SCORER</th>
-                    <th class="small py-2 text-primary fw-bold border-bottom border-primary border-2 text-end pe-3">OVERRIDE</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white">
-                {% for score in blue_scores %}
-                <tr class="{% if score.is_flagged %}flagged-row{% endif %}">
-                    <td class="fw-bold align-middle text-dark">{{ score.round_num }}</td>
-                    <td class="fw-bold align-middle text-dark">{{ score.display_sub_round }}</td>
-                    <td class="align-middle">
-                        {% if score.is_foul %}
-                            <span class="badge bg-danger py-1 px-2">{{ score.foul_reason }} (-3)</span>
-                        {% else %}
-                            <span class="badge bg-success py-1 px-2">+{{ score.points }} PT</span>
-                        {% endif %}
-                    </td>
-                    <td class="align-middle text-uppercase" style="color: #000000 !important; font-weight: 900 !important;">
-                        {{ score.scorer.username|default:"Unknown" }}
-                    </td>
-                    <td class="text-end align-middle pe-3">
-                        <button class="btn btn-sm btn-outline-danger fw-bold shadow-sm" onclick="toggleFlag({{ score.id }})">
-                            {% if score.is_flagged %}⟲ Unflag{% else %}🚩 Flag{% endif %}
-                        </button>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="5" class="text-center text-muted py-4 fst-italic">Waiting for Blue Corner...</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="col-md-6">
+        <h5 class="fw-bold text-primary mb-2">🔵 Blue Corner Activity</h5>
+        <div class="table-responsive bg-white rounded shadow-sm">
+            <table class="table table-bordered text-center mb-0" id="matrix-blue">
+                <thead class="bg-light">
+                    <tr id="matrix-blue-header">
+                        <th>Scorer</th>
+                        </tr>
+                </thead>
+                <tbody id="matrix-blue-body">
+                    <tr><td class="text-muted fst-italic p-4">Awaiting connection...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>

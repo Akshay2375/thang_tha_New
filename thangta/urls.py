@@ -71,4 +71,15 @@ path('coach/participants/<int:participant_id>/edit/', edit_participant_coach, na
 path('coach/participants/<int:participant_id>/delete/', delete_participant_coach, name='delete-participant-coach'),
 
 path('match/<int:match_id>/status/', check_match_status, name='check-match-status'),
+
+
+
+
+# SSSE IMPLEMNTATION
+path('match/<int:match_id>/stream/', match_sse_stream, name='match-sse-stream'),
+path('match/<int:match_id>/flag-live-score/', flag_live_score, name='flag-live-score'),
+
+
+
+
 ]

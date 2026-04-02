@@ -38,16 +38,16 @@
 
         <div class="text-center mb-5">
             {% if match.is_completed and match.winner %}
-<div class="row justify-content-center mt-4 mb-2">
-    <div class="col-md-8 text-center">
-        <div class="alert shadow-sm border-0" style="background: linear-gradient(135deg, #ffd700 0%, #ffb300 100%); color: #4a3300;">
-            <h3 class="fw-bold m-0 py-2">
-                🏆 Match Winner: {{ match.winner.name }} 🏆
-            </h3>
-        </div>
-    </div>
-</div>
-{% endif %}
+            <div class="row justify-content-center mt-4 mb-2">
+                <div class="col-md-8 text-center">
+                    <div class="alert shadow-sm border-0" style="background: linear-gradient(135deg, #ffd700 0%, #ffb300 100%); color: #4a3300;">
+                        <h3 class="fw-bold m-0 py-2">
+                            🏆 Match Winner: {{ match.winner.name }} 🏆
+                        </h3>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             
             <h2 class="fw-bold text-dark mb-3">Live Match Scoreboard</h2>
             
@@ -90,7 +90,7 @@
                             <span class="d-inline-block rounded-circle bg-white opacity-50 me-2" style="width: 12px; height: 12px;"></span>
                             Red Corner
                         </h5>
-                        <h1 class="display-1 fw-bold mb-0" style="font-size: 5rem; letter-spacing: -2px;">{{ total_red }}</h1>
+                        <h1 class="display-1 fw-bold mb-0" style="font-size: 5rem; letter-spacing: -2px;">{{ match.score_red|default:"0" }}</h1>
                         <p class="mt-2 mb-0 fw-semibold" style="color: #ffcccc;">Average Score</p>
                     </div>
                 </div>
@@ -103,7 +103,7 @@
                             <span class="d-inline-block rounded-circle bg-white opacity-50 me-2" style="width: 12px; height: 12px;"></span>
                             Blue Corner
                         </h5>
-                        <h1 class="display-1 fw-bold mb-0" style="font-size: 5rem; letter-spacing: -2px;">{{ total_blue }}</h1>
+                        <h1 class="display-1 fw-bold mb-0" style="font-size: 5rem; letter-spacing: -2px;">{{ match.score_blue|default:"0" }}</h1>
                         <p class="mt-2 mb-0 fw-semibold" style="color: #bfdbfe;">Average Score</p>
                     </div>
                 </div>
@@ -118,41 +118,89 @@
             <div class="card-body p-4">
                 <div class="d-flex flex-column gap-3">
                     
-                    {% for round in round_summary %}
-                    <div class="card border-0 shadow-sm {% if round.status == 'Completed' %}round-card-done{% else %}round-card-active{% endif %}">
+                    {% if match.current_round >= 1 %}
+                    <div class="card border-0 shadow-sm {% if match.current_round > 1 or match.is_completed %}round-card-done{% else %}round-card-active{% endif %}">
                         <div class="card-body d-flex justify-content-between align-items-center p-3">
-                            
                             <div class="d-flex align-items-center gap-3">
-                                {% if round.status == 'Completed' %}
+                                {% if match.current_round > 1 or match.is_completed %}
                                     <div class="bg-success text-white rounded px-2 py-1 shadow-sm fw-bold">✓</div>
                                 {% else %}
                                     <div class="px-2 py-1"><span class="dot-pulse"></span></div>
                                 {% endif %}
-                                
                                 <div>
-                                    <h6 class="fw-bold m-0 text-dark">Round {{ round.round }}</h6>
-                                    <small class="text-muted fw-semibold">{{ round.status }}</small>
+                                    <h6 class="fw-bold m-0 text-dark">Round 1</h6>
+                                    <small class="text-muted fw-semibold">{% if match.current_round > 1 or match.is_completed %}Completed{% else %}In Progress{% endif %}</small>
                                 </div>
                             </div>
-                            
                             <div class="d-flex gap-4 pe-3">
                                 <div class="text-center">
-                                    <h3 class="fw-bold text-danger m-0">{{ round.red_total }}</h3>
+                                    <h3 class="fw-bold text-danger m-0">{{ match.round_1_red|default:"0" }}</h3>
                                     <small class="text-danger fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">RED</small>
                                 </div>
                                 <div class="text-center">
-                                    <h3 class="fw-bold text-primary m-0">{{ round.blue_total }}</h3>
+                                    <h3 class="fw-bold text-primary m-0">{{ match.round_1_blue|default:"0" }}</h3>
                                     <small class="text-primary fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">BLUE</small>
                                 </div>
                             </div>
-                            
                         </div>
                     </div>
-                    {% empty %}
-                    <div class="text-center py-4 text-muted fst-italic">
-                        No rounds have been scored yet.
+                    {% endif %}
+
+                    {% if match.current_round >= 2 %}
+                    <div class="card border-0 shadow-sm {% if match.current_round > 2 or match.is_completed %}round-card-done{% else %}round-card-active{% endif %}">
+                        <div class="card-body d-flex justify-content-between align-items-center p-3">
+                            <div class="d-flex align-items-center gap-3">
+                                {% if match.current_round > 2 or match.is_completed %}
+                                    <div class="bg-success text-white rounded px-2 py-1 shadow-sm fw-bold">✓</div>
+                                {% else %}
+                                    <div class="px-2 py-1"><span class="dot-pulse"></span></div>
+                                {% endif %}
+                                <div>
+                                    <h6 class="fw-bold m-0 text-dark">Round 2</h6>
+                                    <small class="text-muted fw-semibold">{% if match.current_round > 2 or match.is_completed %}Completed{% else %}In Progress{% endif %}</small>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-4 pe-3">
+                                <div class="text-center">
+                                    <h3 class="fw-bold text-danger m-0">{{ match.round_2_red|default:"0" }}</h3>
+                                    <small class="text-danger fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">RED</small>
+                                </div>
+                                <div class="text-center">
+                                    <h3 class="fw-bold text-primary m-0">{{ match.round_2_blue|default:"0" }}</h3>
+                                    <small class="text-primary fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">BLUE</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    {% endfor %}
+                    {% endif %}
+
+                    {% if match.current_round >= 3 %}
+                    <div class="card border-0 shadow-sm {% if match.is_completed %}round-card-done{% else %}round-card-active{% endif %}">
+                        <div class="card-body d-flex justify-content-between align-items-center p-3">
+                            <div class="d-flex align-items-center gap-3">
+                                {% if match.is_completed %}
+                                    <div class="bg-success text-white rounded px-2 py-1 shadow-sm fw-bold">✓</div>
+                                {% else %}
+                                    <div class="px-2 py-1"><span class="dot-pulse"></span></div>
+                                {% endif %}
+                                <div>
+                                    <h6 class="fw-bold m-0 text-dark">Tie Breaker (Round 3)</h6>
+                                    <small class="text-muted fw-semibold">{% if match.is_completed %}Completed{% else %}In Progress{% endif %}</small>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-4 pe-3">
+                                <div class="text-center">
+                                    <h3 class="fw-bold text-danger m-0">{{ match.round_3_red|default:"0" }}</h3>
+                                    <small class="text-danger fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">RED</small>
+                                </div>
+                                <div class="text-center">
+                                    <h3 class="fw-bold text-primary m-0">{{ match.round_3_blue|default:"0" }}</h3>
+                                    <small class="text-primary fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">BLUE</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
 
                 </div>
             </div>

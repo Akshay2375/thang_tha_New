@@ -154,6 +154,23 @@ class Match(models.Model):
     
     # Winner Selection
     winner = models.ForeignKey(Participant, related_name='matches_won', on_delete=models.SET_NULL, null=True, blank=True)
+    # Winner Selection
+ 
+    
+    # ==========================================
+    # 🚨 NEW: THE DATABASE SCORE CHECKPOINTS 
+    # ==========================================
+    score_red = models.IntegerField(default=0)
+    score_blue = models.IntegerField(default=0)
+    
+    round_1_red = models.IntegerField(default=0)
+    round_1_blue = models.IntegerField(default=0)
+    
+    round_2_red = models.IntegerField(default=0)
+    round_2_blue = models.IntegerField(default=0)
+    
+    round_3_red = models.IntegerField(default=0)
+    round_3_blue = models.IntegerField(default=0)
     
     @property
     def age_display(self):

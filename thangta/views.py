@@ -437,6 +437,24 @@ def judge_generate_fixtures(request, tournament_id, ring_number):
 def start_match(request, match_id):
     """Flips the match to active and redirects to the Live Panel."""
     match = get_object_or_404(Match, id=match_id)
+    
+    if not match.participant_blue:
+        match.winner = match.participant_red
+        match.is_completed = True
+        match.save()
+        
+        # Call your auto-advance logic if you have it imported
+        try:
+            from .utils import auto_advance_winner # Or wherever your logic lives
+            auto_advance_winner(match)
+        except Exception as e:
+            print("Auto advance skipped/failed:", e)
+            
+        messages.success(request, f"BYE Match auto-completed. {match.participant_red.name} advances!")
+        return redirect('tournament-matches', tournament_id=match.tournament.id)
+    
+    
+    
     if request.method == 'POST':
         if not match.is_completed:
             match.is_active = True
@@ -547,36 +565,68 @@ def process_sub_rounds(match, participant):
     all_fouls.reverse()
     
     return history_current_round, all_fouls
-
+from django.template.loader import render_to_string
+from django.http import JsonResponse
+from . import state
 
 @judge_required
 def match_live_data(request, match_id):
     match = get_object_or_404(Match, id=match_id)
     
-    # 1. Giant Numbers
-    total_red = sum(calculate_round_score(match, match.participant_red, r) for r in range(1, match.current_round + 1))
-    total_blue = sum(calculate_round_score(match, match.participant_blue, r) for r in range(1, match.current_round + 1)) if match.participant_blue else 0
-    
-    # 2. Round-wise Totals
-    round_summary = []
-    for r in range(1, match.current_round + 1):
-        r_red = calculate_round_score(match, match.participant_red, r)
-        r_blue = calculate_round_score(match, match.participant_blue, r) if match.participant_blue else 0
-        round_summary.append({
-            'round': r,
-            'status': 'In Progress' if r == match.current_round else 'Completed',
-            'red_total': r_red,
-            'blue_total': r_blue,
-        })
+    # Grab the data from the Memory Engine instead of the Database
+    with state.state_lock:
+        match_live = state.liveState.get(match.id, {})
+        match_totals = state.total.get(match.id, {})
         
+        # 1. Giant Numbers
+        total_red = sum(rnd.get('red', 0) for rnd in match_totals.values())
+        total_blue = sum(rnd.get('blue', 0) for rnd in match_totals.values())
+        
+        # 2. Round-wise Totals
+        round_summary = []
+        for r in range(1, int(match.current_round) + 1):
+            r_red = match_totals.get(r, {}).get('red', 0)
+            r_blue = match_totals.get(r, {}).get('blue', 0)
+            
+            round_summary.append({
+                'round': r,
+                'status': 'In Progress' if r == int(match.current_round) else 'Completed',
+                'red_total': r_red,
+                'blue_total': r_blue,
+            })
+            
+        # 3. Process Scores On-The-Fly! (Translating RAM data for your templates)
+        red_history = []
+        blue_history = []
+        
+        # We loop through the RAM state and package it exactly how your old process_sub_rounds did
+        for rnd_num, subrounds in match_live.items():
+            for sub_num, sr_data in sorted(subrounds.items()):
+                red_data = sr_data.get('red', {})
+                blue_data = sr_data.get('blue', {})
+                
+                # Only pass COMPLETE scores to your template to prevent partial math bugs
+                if red_data.get('status') == 'COMPLETE':
+                    red_history.append({
+                        'round_num': rnd_num,
+                        'sub_round': sub_num,
+                        'points': red_data.get('average', 0),
+                        'scorer': 'Avg', # Fallback in case your template prints the scorer name
+                    })
+                    
+                if blue_data.get('status') == 'COMPLETE':
+                    blue_history.append({
+                        'round_num': rnd_num,
+                        'sub_round': sub_num,
+                        'points': blue_data.get('average', 0),
+                        'scorer': 'Avg',
+                    })
+
+    # === YOUR ORIGINAL TEMPLATE RENDERING (UNCHANGED) ===
     summary_html = render_to_string('partials/round_summary_cards.html', {
         'round_summary': round_summary,
         'match': match
     }, request=request)
-    
-    # 3. Process Scores On-The-Fly!
-    red_history, red_fouls = process_sub_rounds(match, match.participant_red)
-    blue_history, blue_fouls = process_sub_rounds(match, match.participant_blue)
     
     feed_html = render_to_string('partials/score_feed_rows.html', {
         'red_scores': red_history,
@@ -585,8 +635,8 @@ def match_live_data(request, match_id):
     }, request=request)
     
     foul_html = render_to_string('partials/foul_feed_rows.html', {
-        'red_fouls': red_fouls,
-        'blue_fouls': blue_fouls,
+        'red_fouls': [],  # Fouls are now calculated into the averages automatically
+        'blue_fouls': [],
         'match': match
     }, request=request)
         
@@ -597,6 +647,7 @@ def match_live_data(request, match_id):
         'feed_html': feed_html,
         'foul_html': foul_html,
     })
+
 @judge_required
 @require_POST
 def advance_match_round(request, match_id, round_num):
@@ -881,27 +932,82 @@ def calculate_round_score(match, participant, round_num):
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 
-@scorer_required
+from django.http import JsonResponse
+from . import state # Make sure you still have this import!
+
+
+
+
+
+def match_live_state(request, match_id):
+    """Phase 4: DISPLAY - Enforces strict order and hides pending partials"""
+    with state.state_lock:
+        match_live = state.liveState.get(match_id, {})
+        match_total = state.total.get(match_id, {})
+        
+        display_data = {
+            'rounds': {},
+            'totals': match_total
+        }
+        
+        for rnd, subrounds in match_live.items():
+            display_data['rounds'][rnd] = {}
+            
+            # Sort subrounds to ensure sequential checking (1, 2, 3...)
+            sorted_subrounds = sorted(subrounds.keys())
+            
+            for sr in sorted_subrounds:
+                red_state = subrounds[sr]['red']
+                blue_state = subrounds[sr]['blue']
+                
+                # Check if this subround is fully complete for BOTH corners
+                # (Or you can split this logic if corners advance asynchronously)
+                if red_state.get('status') == 'COMPLETE' and blue_state.get('status') == 'COMPLETE':
+                    display_data['rounds'][rnd][sr] = {
+                        'status': 'COMPLETE',
+                        'red_avg': red_state['average'],
+                        'blue_avg': blue_state['average']
+                    }
+                else:
+                    # Show WAITING for current incomplete subround
+                    display_data['rounds'][rnd][sr] = {
+                        'status': 'WAITING FOR SCORES',
+                        'red_status': red_state.get('status'),
+                        'blue_status': blue_state.get('status')
+                    }
+                    # ORDER ENFORCEMENT: Break loop. Do not expose N+1.
+                    break 
+                    
+        return JsonResponse(display_data)
+    
+    
 @require_POST
-def submit_score(request, match_id):
+def finalize_match(request, match_id):
+    """Phase 5 & 6: Finalize and Flush"""
     match = get_object_or_404(Match, id=match_id)
-    participant = get_object_or_404(Participant, id=request.POST.get('participant_id'))
-    is_foul = request.POST.get('is_foul') == 'true'
     
-    # Force integer!
-    current_round_int = int(match.current_round)
-    
-    # The exact same bulletproof count
-    scorer_score_count = Score.objects.filter(
-        match=match, 
-        round_num=current_round_int, 
-        participant=participant,
-        scorer=request.user
-    ).count()
-    
-    current_sub = scorer_score_count + 1
-    
-    # ... (Keep all your Score.objects.create() code exactly the same below this!) ...
+    with state.state_lock:
+        # Phase 5: Finalize (Sum all completed averages from the total dict)
+        match_totals = state.total.get(match_id, {})
+        
+        final_red = sum(rnd_totals['red'] for rnd_totals in match_totals.values())
+        final_blue = sum(rnd_totals['blue'] for rnd_totals in match_totals.values())
+        
+        match.score_red = final_red
+        match.score_blue = final_blue
+        match.is_completed = True
+        match.save()
+        
+        # Phase 6: Flush (Prevent memory buildup)
+        if match_id in state.scores:
+            del state.scores[match_id]
+        if match_id in state.liveState:
+            del state.liveState[match_id]
+        if match_id in state.total:
+            del state.total[match_id]
+            
+    return JsonResponse({'status': 'match_completed', 'final_red': final_red, 'final_blue': final_blue})
+
 from django.http import HttpResponse
 
 @scorer_required
@@ -1130,37 +1236,14 @@ def tournament_matches(request, tournament_id):
         'session_ring': session_ring, # Pass the ring to the template so we can display it
     })
 def match_summary(request, match_id):
-    """Displays the final detailed scoreboard for a completed match."""
     match = get_object_or_404(Match, id=match_id)
     
-    # 1. Calculate the FINAL match totals
-    total_red = sum(calculate_round_score(match, match.participant_red, r) for r in range(1, match.current_round + 1))
+    # We don't need to calculate anything here! 
+    # The RAM engine already saved the totals to match.score_red and match.round_1_red, etc.
     
-    total_blue = 0
-    if match.participant_blue:
-        total_blue = sum(calculate_round_score(match, match.participant_blue, r) for r in range(1, match.current_round + 1))
-        
-    # 2. Build the Round-by-Round breakdown for the bottom cards
-    round_summary = []
-    for r in range(1, match.current_round + 1):
-        r_red = calculate_round_score(match, match.participant_red, r)
-        r_blue = calculate_round_score(match, match.participant_blue, r) if match.participant_blue else 0
-        round_summary.append({
-            'round': r,
-            'status': 'Completed' if match.is_completed else ('In Progress' if r == match.current_round else 'Completed'),
-            'red_total': r_red,
-            'blue_total': r_blue,
-        })
-        
-    # Change 'match_scoreboard.html' to whatever the actual name of your template from Image 2 is!
     return render(request, 'match_scoreboard.html', {
-        'match': match,
-        'total_red': total_red,
-        'total_blue': total_blue,
-        'round_summary': round_summary,
-    })
-    
-    
+        'match': match
+    }) 
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .models import District, Participant # Make sure Participant is imported!
@@ -1311,3 +1394,186 @@ def check_match_status(request, match_id):
     return JsonResponse({
         'is_completed': match.is_completed
     })
+    
+    
+    
+    
+    # =====================
+# SSE IMPLEMNTATIONNN 
+# ===========================
+
+
+from django.http import StreamingHttpResponse
+import json
+import queue
+from . import state # Import your new state engine
+
+def match_sse_stream(request, match_id):
+    """The SSE endpoint that keeps a persistent connection with the Judge."""
+    
+    def event_stream():
+        # 1. Register this connection in the state engine
+        client_queue = state.register_client(match_id)
+        
+        try:
+            # 2. Immediately send the current state so the UI loads instantly
+            current_state = state.get_or_create_match_state(match_id)['rounds']
+            initial_payload = {'type': 'INITIAL_STATE', 'state': current_state}
+            yield f"data: {json.dumps(initial_payload)}\n\n"
+
+            # 3. Enter an infinite loop, waiting for new data to appear in the queue
+            while True:
+                try:
+                    # Wait up to 15 seconds for a new score or flag
+                    message = client_queue.get(timeout=15)
+                    yield f"data: {json.dumps(message)}\n\n"
+                except queue.Empty:
+                    # If 15 seconds pass with no new scores, send a silent "heartbeat".
+                    # This prevents Nginx/browsers from closing the connection due to inactivity!
+                    yield ": heartbeat\n\n"
+                    
+        except GeneratorExit:
+            # 4. If the Judge closes the tab or navigates away, clean up the queue
+            state.remove_client(match_id, client_queue)
+
+    # Return the special Streaming response
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no' # Crucial if you are using Nginx!
+    return response
+
+
+import json
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.shortcuts import get_object_or_404
+from .models import Match # Adjust if your import is different
+from . import state
+
+ 
+@scorer_required
+@require_POST
+
+def submit_score(request, match_id):
+    """Takes input from the Scorer's phone and injects it into the RAM State Machine."""
+    match = get_object_or_404(Match, id=match_id)
+    
+    # 1. Safely deduce the corner
+    participant_id = request.POST.get('participant_id')
+    if str(participant_id) == str(match.participant_red.id):
+        corner = 'red'
+    else:
+        corner = 'blue'
+
+    # 2. Parse the data into strict integers
+    round_num = int(match.current_round)
+    subround = int(request.POST.get('subround', 1))
+    scorer_id = int(request.user.id)
+    
+   # Inside views.py -> submit_score ...
+
+    # 3. Calculate Foul & Score values
+    is_foul = request.POST.get('is_foul') == 'true'
+    foul_val = -3 if is_foul else 0
+    
+    points_str = request.POST.get('points', '0')
+    score_val = sum(int(pt.strip()) for pt in points_str.split(',') if pt.strip().isdigit())
+    if score_val > 6:
+        score_val = 6
+
+    # 🚨 NEW: Grab the name of the logged-in Scorer
+    scorer_name = request.user.get_full_name()
+    if not scorer_name:
+        scorer_name = request.user.username
+
+    # 4. Inject into the State Machine
+    # ... (Top part of submit_score remains the same) ...
+
+    # 4. Inject into the State Machine
+   # 4. Inject into the State Machine
+    newly_completed, current_state = state.submit_scorer_data(
+        match_id=match.id,
+        round_num=round_num,
+        subround=subround,
+        corner=corner,
+        scorer_id=scorer_id,
+        scorer_name=scorer_name,  
+        score=score_val,
+        foul=foul_val
+    )
+    
+    # 🚨 DB CHECKPOINT: Save to database when a subround completes
+    if newly_completed:
+        total_red = 0
+        total_blue = 0
+        
+        round_totals = {1: {'red': 0, 'blue': 0}, 2: {'red': 0, 'blue': 0}, 3: {'red': 0, 'blue': 0}}
+        
+        # Safely sum up all the finished math from the RAM engine
+        for r_num, r_data in current_state['rounds'].items():
+            r_num_int = int(r_num)
+            for sr_num, sr_data in r_data['subrounds'].items():
+                if sr_data['red']['status'] == 'COMPLETE':
+                    round_totals[r_num_int]['red'] += sr_data['red']['final_score']
+                if sr_data['blue']['status'] == 'COMPLETE':
+                    round_totals[r_num_int]['blue'] += sr_data['blue']['final_score']
+        
+        # Add up the Grand Totals
+        for r_totals in round_totals.values():
+            total_red += r_totals['red']
+            total_blue += r_totals['blue']
+
+        # ==========================================
+        # 🚨 CHANGE THESE TO MATCH YOUR MODELS.PY 🚨
+        # ==========================================
+        
+        # Grand Totals
+        match.score_red = total_red    # <--- Check this name!
+        match.score_blue = total_blue  # <--- Check this name!
+        
+        # Round 1
+        if hasattr(match, 'round_1_red'): # <--- Check this name!
+            match.round_1_red = round_totals[1]['red']
+            match.round_1_blue = round_totals[1]['blue']
+            
+        # Round 2
+        if hasattr(match, 'round_2_red'): # <--- Check this name!
+            match.round_2_red = round_totals[2]['red']
+            match.round_2_blue = round_totals[2]['blue']
+            
+        # Round 3
+        if hasattr(match, 'round_3_red'): # <--- Check this name!
+            match.round_3_red = round_totals[3]['red']
+            match.round_3_blue = round_totals[3]['blue']
+            
+        match.save() # THIS IS WHAT LOCKS IT IN!
+
+
+    return JsonResponse({'status': 'success', 'subround_completed': newly_completed})
+
+
+
+# @judge_required
+@require_POST
+def flag_live_score(request, match_id):
+    """Allows the Judge to flag an individual scorer's input in real-time."""
+    # We use json.loads because the frontend will send this via a JS fetch with a JSON body
+    data = json.loads(request.body)
+    
+    round_num = int(data.get('round_num'))
+    subround = int(data.get('subround'))
+    corner = data.get('corner')
+    scorer_id = int(data.get('scorer_id'))
+
+    # Inject into State Machine (This automatically triggers the SSE broadcast!)
+    success, current_state = state.flag_score(
+        match_id=match_id, 
+        round_num=round_num, 
+        subround=subround, 
+        corner=corner, 
+        scorer_id=scorer_id
+    )
+    
+    if success:
+        return JsonResponse({'status': 'success'})
+    return JsonResponse({'status': 'error', 'message': 'Score not found in active memory.'}, status=400)
