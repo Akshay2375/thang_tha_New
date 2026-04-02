@@ -192,6 +192,31 @@ class Match(models.Model):
     def __str__(self):
         blue_name = self.participant_blue.name if self.participant_blue else "BYE"
         return f"Round {self.round_number} | Ring {self.ring_number} | {self.participant_red.name} (RED) vs {blue_name} (BLUE)"
+    def save(self, *args, **kwargs):
+        is_new_bye = False
+        
+        # Check if this is a BYE match that hasn't been completed yet
+        if not self.participant_blue and not self.is_completed:
+            self.winner = self.participant_red
+            self.is_completed = True
+            self.is_active = False
+            self.score_red = 0
+            self.score_blue = 0
+            is_new_bye = True
+
+        # First, save the match to the database so it gets an ID
+        super().save(*args, **kwargs)
+
+        # If it was a new BYE, automatically trigger the next round advancement
+        if is_new_bye:
+            try:
+                # We import locally here to avoid "Circular Import" errors in Django
+                from .utils import auto_advance_winner 
+                auto_advance_winner(self)
+            except ImportError:
+                pass
+            except Exception as e:
+                print(f"Auto-advance failed for BYE match {self.id}: {e}")
 
 
 # ==========================================

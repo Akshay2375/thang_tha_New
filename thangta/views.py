@@ -465,6 +465,28 @@ def start_match(request, match_id):
 @judge_required
 def judge_live_match(request, match_id):
     match = get_object_or_404(Match, id=match_id)
+    
+    # ==========================================
+    # 🚨 THE ZOMBIE BYE KILLER 🚨
+    # If the match somehow became "Live" but has no blue opponent, 
+    # kill the live status and auto-win the match.
+    # ==========================================
+    if not match.participant_blue:
+        match.winner = match.participant_red
+        match.is_completed = True
+        match.is_active = False  # Turn off the "LIVE MATCH" badge!
+        match.save()
+        
+        # Try to auto-advance if you have that logic built
+        try:
+            from .utils import auto_advance_winner
+            auto_advance_winner(match)
+        except Exception:
+            pass
+            
+        messages.success(request, f"{match.participant_red.name} automatically advances due to BYE!")
+        return redirect('tournament-matches', tournament_id=match.tournament.id)
+    # ==========================================
     score_feed = match.scores.all()
     valid_scores = score_feed.filter(is_flagged=False, is_foul=False)
     # sub_round=
@@ -1451,27 +1473,33 @@ from .models import Match # Adjust if your import is different
 from . import state
 
  
-@scorer_required
-@require_POST
+import json
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.shortcuts import get_object_or_404
+from .models import Match, Score # Ensure Score is imported!
+from . import state
 
+@scorer_required  
+@require_POST
 def submit_score(request, match_id):
-    """Takes input from the Scorer's phone and injects it into the RAM State Machine."""
+    """Takes input from the Scorer's phone, logs it, and injects it into the RAM State Machine."""
     match = get_object_or_404(Match, id=match_id)
     
     # 1. Safely deduce the corner
     participant_id = request.POST.get('participant_id')
     if str(participant_id) == str(match.participant_red.id):
         corner = 'red'
+        target_participant = match.participant_red
     else:
         corner = 'blue'
+        target_participant = match.participant_blue
 
     # 2. Parse the data into strict integers
     round_num = int(match.current_round)
     subround = int(request.POST.get('subround', 1))
     scorer_id = int(request.user.id)
     
-   # Inside views.py -> submit_score ...
-
     # 3. Calculate Foul & Score values
     is_foul = request.POST.get('is_foul') == 'true'
     foul_val = -3 if is_foul else 0
@@ -1481,16 +1509,30 @@ def submit_score(request, match_id):
     if score_val > 6:
         score_val = 6
 
-    # 🚨 NEW: Grab the name of the logged-in Scorer
+    # Grab the name of the logged-in Scorer
     scorer_name = request.user.get_full_name()
     if not scorer_name:
         scorer_name = request.user.username
 
-    # 4. Inject into the State Machine
-    # ... (Top part of submit_score remains the same) ...
+    # ==========================================
+    # 🚨 STEP A: THE AUDIT TRAIL LOG
+    # Save the exact receipt to the database for historical records!
+    # ==========================================
+    Score.objects.create(
+        match=match,
+        participant=target_participant,
+        scorer=request.user,
+        points=foul_val if is_foul else score_val,
+        sub_round=subround,
+        round_num=round_num,
+        is_foul=is_foul,
+        foul_reason=request.POST.get('foul_reason', '') if is_foul else None
+    )
 
-    # 4. Inject into the State Machine
-   # 4. Inject into the State Machine
+    # ==========================================
+    # 🚨 STEP B: THE LIVE STATE MACHINE
+    # Inject into RAM (This automatically triggers the SSE broadcast!)
+    # ==========================================
     newly_completed, current_state = state.submit_scorer_data(
         match_id=match.id,
         round_num=round_num,
@@ -1502,7 +1544,10 @@ def submit_score(request, match_id):
         foul=foul_val
     )
     
-    # 🚨 DB CHECKPOINT: Save to database when a subround completes
+    # ==========================================
+    # 🚨 STEP C: THE DATABASE CHECKPOINT
+    # Save the running totals to the Match model ONLY when 3 judges finish
+    # ==========================================
     if newly_completed:
         total_red = 0
         total_blue = 0
@@ -1523,37 +1568,32 @@ def submit_score(request, match_id):
             total_red += r_totals['red']
             total_blue += r_totals['blue']
 
-        # ==========================================
-        # 🚨 CHANGE THESE TO MATCH YOUR MODELS.PY 🚨
-        # ==========================================
+        # Save Grand Totals
+        match.score_red = total_red    
+        match.score_blue = total_blue  
         
-        # Grand Totals
-        match.score_red = total_red    # <--- Check this name!
-        match.score_blue = total_blue  # <--- Check this name!
-        
-        # Round 1
-        if hasattr(match, 'round_1_red'): # <--- Check this name!
+        # Save Round 1
+        if hasattr(match, 'round_1_red'): 
             match.round_1_red = round_totals[1]['red']
             match.round_1_blue = round_totals[1]['blue']
             
-        # Round 2
-        if hasattr(match, 'round_2_red'): # <--- Check this name!
+        # Save Round 2
+        if hasattr(match, 'round_2_red'): 
             match.round_2_red = round_totals[2]['red']
             match.round_2_blue = round_totals[2]['blue']
             
-        # Round 3
-        if hasattr(match, 'round_3_red'): # <--- Check this name!
+        # Save Round 3 (Tie Breaker)
+        if hasattr(match, 'round_3_red'): 
             match.round_3_red = round_totals[3]['red']
             match.round_3_blue = round_totals[3]['blue']
             
-        match.save() # THIS IS WHAT LOCKS IT IN!
+        match.save() # THIS LOCKS IT IN!
 
-
+    # We return the subround_completed flag so the Scorer's phone knows if it advanced
     return JsonResponse({'status': 'success', 'subround_completed': newly_completed})
 
 
-
-# @judge_required
+@judge_required
 @require_POST
 def flag_live_score(request, match_id):
     """Allows the Judge to flag an individual scorer's input in real-time."""
