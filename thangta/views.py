@@ -794,15 +794,19 @@ def scorer_ring_matches(request, tournament_id, ring_number): # (Your function n
 from django.urls import reverse
 from django.contrib import messages
 
+@scorer_required
 def scorer_select_corner(request, match_id):
     match = get_object_or_404(Match, id=match_id)
     
-    # THE FIX: Save the Tournament ID into the scorer's session
+    # Your session fix stays!
     request.session['active_tournament_id'] = match.tournament.id
     
-    return render(request, 'scorer_panel.html', {
+    # 🚨 FIX: Render the SELECTION page, NOT the panel!
+    return render(request, 'scorer_select_corner.html', {
         'match': match,
     })
+    
+    
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -860,6 +864,9 @@ def scorer_panel(request, match_id):
     current_round_int = int(match.current_round)
 
     # 3. The BULLETPROOF Count: Match + Round + Fighter + Specific Judge
+    # ... (all your existing logic) ...
+
+    # 3. The BULLETPROOF Count: Match + Round + Fighter + Specific Judge
     scorer_score_count = Score.objects.filter(
         match=match, 
         round_num=current_round_int, 
@@ -867,16 +874,20 @@ def scorer_panel(request, match_id):
         scorer=request.user 
     ).count()
     
+    # We use this to tell the Scorer's phone exactly where they are in the match
     current_sub_round = scorer_score_count + 1
     
     return render(request, 'scorer_panel.html', {
         'match': match,
-        'corner': corner,
+        'corner': corner,  
         'current_sub_round': current_sub_round, 
         'points_string': "",
         'total_score': 0,
         'db_score_count': 0, 
     })
+    
+    
+    
 from django.http import HttpResponse
 
 
