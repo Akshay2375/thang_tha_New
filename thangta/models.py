@@ -144,7 +144,7 @@ class Match(models.Model):
     current_sub_round = models.IntegerField(default=1)
     match_sequence = models.IntegerField(help_text="Order of the match in this round")
     current_sub_round = models.IntegerField(default=1)
-    
+    active_scorers = models.ManyToManyField(CustomUser, blank=True, related_name='scoring_matches')
     # 4. Match Structure
     ring_number = models.IntegerField(default=1)
     

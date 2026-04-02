@@ -794,79 +794,97 @@ def scorer_ring_matches(request, tournament_id, ring_number): # (Your function n
 from django.urls import reverse
 from django.contrib import messages
 
+from django.urls import reverse
+
 @scorer_required
 def scorer_select_corner(request, match_id):
     match = get_object_or_404(Match, id=match_id)
     
-    # Your session fix stays!
+    # ==========================================
+    # 🚨 THE BULLETPROOF INTERCEPTOR
+    # ==========================================
+    session_key = f"locked_corner_match_{match.id}"
+    locked_corner = request.session.get(session_key)
+    
+    if locked_corner:
+        # If they are already locked in, do not let them see the buttons!
+        # Instantly bounce them back to their assigned panel.
+        messages.info(request, f"You are locked to the {locked_corner.upper()} corner.")
+        url = reverse('scorer-panel', args=[match.id])
+        return redirect(f"{url}?corner={locked_corner}")
+    # ==========================================
+
     request.session['active_tournament_id'] = match.tournament.id
     
-    # 🚨 FIX: Render the SELECTION page, NOT the panel!
     return render(request, 'scorer_select_corner.html', {
         'match': match,
     })
     
     
-from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect, render
+    
+from django.contrib import messages 
 
-@scorer_required
+from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
+from django.contrib import messages
+from .models import Match, Score 
+
+# @scorer_required
 def scorer_panel(request, match_id):
     """The scoring panel that securely locks the scorer into their chosen corner."""
     match = get_object_or_404(Match, id=match_id)
-    corner = request.GET.get('corner') 
+    corner = request.GET.get('corner', '').lower()
     
+    # 1. Check if match is live
     if match.is_completed or not match.is_active:
         messages.warning(request, "This match is not currently active.")
-        return redirect('tournament-dashboard')
+        return redirect('scorer-dashboard')
 
-    # ==========================================
-    # 🚨 NEW: THE DEVELOPER RESET HACK
-    # ==========================================
     session_key = f"locked_corner_match_{match.id}"
     
+    # ==========================================
+    # 🚨 THE DEVELOPER RESET HACK
+    # ==========================================
     if request.GET.get('reset') == 'true':
         if session_key in request.session:
             del request.session[session_key]
             request.session.modified = True
         messages.success(request, "Security lock removed! You can now pick a new corner.")
         return redirect('scorer-select-corner', match_id=match.id)
+
     # ==========================================
-
-    if corner == 'blue' and not match.participant_blue:
-        messages.error(request, "Invalid corner selected.")
-        return redirect('scorer-select-corner', match_id=match.id)
-
-    # --- EXISTING SECURITY LOCK LOGIC ---
+    # 🚨 THE URL TAMPER TRAP & SECURITY LOCK
+    # ==========================================
     locked_corner = request.session.get(session_key)
-    # ... (the rest of your view remains the same)
-
+    
     if locked_corner:
-        # If they try to change the URL manually from ?corner=red to ?corner=blue, stop them!
         if corner != locked_corner:
-            messages.warning(request, "Access Denied: You cannot switch corners mid-match.")
+            # They tried to switch corners mid-match! Trap them and send them back.
+            messages.warning(request, f"Access Denied: You are locked to the {locked_corner.upper()} corner.")
             url = reverse('scorer-panel', args=[match.id])
             return redirect(f"{url}?corner={locked_corner}")
-        corner = locked_corner # Ensure we use their locked corner
+        
+        # Safe to proceed
+        corner = locked_corner 
+        
     elif corner in ['red', 'blue']:
-        # First time accessing! Lock their choice into the session permanently for this match.
+        # First time arriving! Check for BYE match mistake, then lock the door.
+        if corner == 'blue' and not match.participant_blue:
+            messages.error(request, "Invalid corner selected. There is no Blue participant.")
+            return redirect('scorer-select-corner', match_id=match.id)
+            
         request.session[session_key] = corner
     else:
-        # No corner provided and no lock found? Send them back to selection.
+        # No corner in URL? Kick them to the selection screen.
         return redirect('scorer-select-corner', match_id=match.id)
-    # -------------------------------
-
     
-  # 1. Figure out exactly which fighter this panel is scoring
+    # ==========================================
+    # 🚨 SUB-ROUND MATH
+    # ==========================================
     participant = match.participant_red if corner == 'red' else match.participant_blue
-    
-    # 2. Force the round to be a strict integer to prevent database mismatch bugs
     current_round_int = int(match.current_round)
 
-    # 3. The BULLETPROOF Count: Match + Round + Fighter + Specific Judge
-    # ... (all your existing logic) ...
-
-    # 3. The BULLETPROOF Count: Match + Round + Fighter + Specific Judge
+    # The BULLETPROOF Count: Match + Round + Fighter + Specific Judge
     scorer_score_count = Score.objects.filter(
         match=match, 
         round_num=current_round_int, 
@@ -874,19 +892,16 @@ def scorer_panel(request, match_id):
         scorer=request.user 
     ).count()
     
-    # We use this to tell the Scorer's phone exactly where they are in the match
     current_sub_round = scorer_score_count + 1
     
     return render(request, 'scorer_panel.html', {
         'match': match,
-        'corner': corner,  
+        'corner': corner,  # This makes the HTML Red or Blue
         'current_sub_round': current_sub_round, 
         'points_string': "",
         'total_score': 0,
         'db_score_count': 0, 
     })
-    
-    
     
 from django.http import HttpResponse
 

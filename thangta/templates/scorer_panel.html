@@ -61,8 +61,14 @@
 
 <div class="page-container">
     <div class="d-flex justify-content-between align-items-center mb-4">
-   
-        <span class="fw-bold">Ring {{ match.ring_number }} • Match {{ match.match_sequence }}</span>
+        <span class="fw-bold text-muted">Ring {{ match.ring_number }} • Match {{ match.match_sequence }}</span>
+        
+        <div class="text-end">
+            <span class="badge bg-secondary bg-opacity-25 text-dark border border-secondary shadow-sm px-3 py-2 rounded-pill">
+                <span class="opacity-75 me-1">Scorer:</span> 
+                <strong class="text-uppercase">{{ request.user.get_full_name|default:request.user.username }}</strong>
+            </span>
+        </div>
     </div>
     
     <div class="scoring-card">
@@ -166,23 +172,49 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-    // Variables for the visual UI logic
-    let dbPointsString = "";
-    let dbTotalScore = 0;
-    let dbScoreCount = 0;
-    
+    // --- 1. CORE VARIABLES ---
     let pendingScores = [];
     let selectedFoulType = null;
-    let currentActiveSubRound = parseInt("{{ current_sub_round }}") || 1;
-    let currentActiveRound = parseInt("{{ match.current_round|default:'1' }}");
-
-    // ==========================================
-    // 🚨 NEW: THE VIP PASS FLAG
-    // ==========================================
-    let isSafeToReload = false; 
+    let currentActiveSubRound = parseInt("{{ current_sub_round|default:1 }}");
     let isMatchOfficiallyOver = false;
 
+    // --- 2. THE NAVIGATION LOCKDOWN ---
+    history.pushState(null, null, location.href);
+    window.onpopstate = function () {
+        if (!isMatchOfficiallyOver) {
+            history.pushState(null, null, location.href);
+            flashToast("danger", "Navigation disabled! Finish the match first.", "danger");
+        }
+    };
+
+    window.addEventListener('beforeunload', function (e) {
+        if (!isMatchOfficiallyOver) {
+            e.preventDefault();
+            e.returnValue = 'Match in progress! Leaving will disrupt scoring.';
+        }
+    });
+
+    // --- 3. AUTO-ADVANCE & STATUS CHECK ---
+    function checkMatchStatus() {
+        fetch(`/match/{{ match.id }}/status/`)
+            .then(response => response.json())
+            .then(data => {
+                // 🚨 FIXED: 'true' must be lowercase in Javascript!
+                if (data.is_completed === true || data.status === 'completed') {
+                    isMatchOfficiallyOver = true; 
+                    flashToast("success", "Match Over! Redirecting...", "success");
+                    setTimeout(() => {
+                        window.location.href = "{% url 'scorer-dashboard' %}";
+                    }, 2000);
+                }
+            })
+            .catch(err => console.log("Status check failed", err));
+    }
+    setInterval(checkMatchStatus, 5000);
+
+    // --- 4. UI INTERACTION FUNCTIONS (Buttons & Fouls) ---
     function updateUI() {
         if (selectedFoulType) {
             document.getElementById('ui-sequence').innerText = 'FOUL';
@@ -193,28 +225,22 @@
             return;
         }
 
-        let total = dbTotalScore + pendingScores.reduce((a, b) => a + b, 0);
-        let sequenceStr = dbPointsString;
-        
-        if (pendingScores.length > 0) {
-            let pendingStr = pendingScores.join(' + ');
-            if (sequenceStr !== "") { sequenceStr += " + " + pendingStr; } 
-            else { sequenceStr = pendingStr; }
-        }
+        let total = pendingScores.reduce((a, b) => a + b, 0);
+        let sequenceStr = pendingScores.join(' + ');
 
         document.getElementById('ui-sequence').innerText = sequenceStr === "" ? "—" : sequenceStr;
         document.getElementById('ui-sequence').className = sequenceStr === "" ? "" : 'text-danger fw-bold';
         document.getElementById('ui-total').innerText = total;
 
         // Lock at 3 entries
-        let totalEntries = dbScoreCount + pendingScores.length;
+        let totalEntries = pendingScores.length;
         document.getElementById('btn-point-1').disabled = (totalEntries >= 3);
         document.getElementById('btn-point-2').disabled = (totalEntries >= 3);
     }
 
     function prepareScore(points) {
-        if (dbScoreCount + pendingScores.length >= 3) {
-            flashToast("Warning", "Max 3 entries allowed!", "warning");
+        if (pendingScores.length >= 3) {
+            flashToast("warning", "Max 3 entries allowed!", "warning");
             return; 
         }
         clearFoulSelection();
@@ -244,7 +270,8 @@
         selectedFoulType = null;
     }
 
-  function submitScores(participantId) {
+    // --- 5. SCORE SUBMISSION LOGIC ---
+    function submitScores(participantId) {
         if (event) { event.preventDefault(); }
 
         const formData = new FormData();
@@ -252,10 +279,8 @@
         formData.append('is_foul', selectedFoulType !== null);
         formData.append('foul_reason', selectedFoulType || '');
         formData.append('points', pendingScores.length > 0 ? pendingScores.join(',') : '0');
-        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-        
-        // Tell the Memory Engine exactly which sub-round we are scoring
         formData.append('subround', currentActiveSubRound);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
         const submitBtn = document.getElementById('submit-scores-btn');
         submitBtn.disabled = true;
@@ -268,33 +293,21 @@
         .then(response => response.json())
         .then(data => {
             if(data.status === 'success') {
+                currentActiveSubRound++;
                 
-                // 🚨 1. ADVANCE THE MATH
-                currentActiveSubRound++; 
-                
-                // 🚨 2. UPDATE THE UI (Checks both div text and input values to be safe!)
                 const srDisplay = document.getElementById('current-sub-round-display');
                 if (srDisplay) {
                     srDisplay.innerText = currentActiveSubRound;
-                    srDisplay.value = currentActiveSubRound; 
-                } else {
-                    console.error("Could not find the HTML box with id 'current-sub-round-display'");
                 }
                 
-                // 3. WIPE THE BOARD CLEAN FOR THE NEXT ROUND
+                // Wipe the board clean
                 pendingScores = [];
-                dbPointsString = "";
-                dbTotalScore = 0;
-                dbScoreCount = 0;
-                
                 clearFoulSelection(); 
                 updateUI();
                 
                 submitBtn.disabled = false;
                 submitBtn.innerText = "✓ Submit Scores";
-
-                flashToast("success", "Score Sent! Moving to Sub-round " + currentActiveSubRound, "success");
-                
+                flashToast("success", "Score Sent! Sub-round " + currentActiveSubRound, "success");
             } else {
                 flashToast("danger", data.message || "Submission failed.", "danger");
                 submitBtn.disabled = false;
@@ -309,74 +322,19 @@
         });
     }
 
-   function syncMatchState() {
-        fetch("{% url 'fetch-score-history' match.id %}?corner={{ corner }}")
-        .then(response => {
-            let serverRound = parseInt(response.headers.get('X-Current-Round'));
-            
-            // 🚨 ONLY care about the MAIN ROUND changing. 
-            // We let the frontend handle the sub-rounds independently now!
-            if (!isNaN(serverRound) && serverRound > currentActiveRound) {
-                let roundName = (serverRound === 3) ? "the TIE BREAKER" : "ROUND " + serverRound;
-                alert("🔔 ATTENTION SCORER: The Judge has officially started " + roundName + "!");
-                
-                isSafeToReload = true; // Activate VIP Pass
-                window.location.reload(); 
-                return;
-            }
-        })
-        .catch(error => console.log("Background sync error:", error));
-    }
-
+    // --- 6. TOAST NOTIFICATIONS ---
     function flashToast(type, message, bsClass) {
         const toast = document.getElementById('feedback-toast');
+        if(!toast) return;
         toast.className = `alert alert-${bsClass} fw-bold px-5 py-3 shadow-lg rounded-pill`;
-        toast.innerHTML = (bsClass === 'warning' ? '<img src="https://img.icons8.com/emoji/48/warning-emoji.png" alt="warning icon" class="me-2" style="width: 25px;"/> ' : '') + message;
+        toast.innerHTML = (bsClass === 'warning' ? '⚠️ ' : '') + message;
         toast.style.display = 'block';
-        setTimeout(() => toast.style.display = 'none', 1500);
+        setTimeout(() => toast.style.display = 'none', 2000);
     }
 
     // Initialize UI on load
     updateUI();
-    setInterval(syncMatchState, 5000);
-
-    const matchId = "{{ match.id }}";
-    const fixturesUrl = "{% url 'tournament-matches' match.tournament.id %}"; 
-
-    setInterval(function() {
-        fetch(`/match/${matchId}/status/`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.is_completed === true) {
-                    isMatchOfficiallyOver = true; 
-                    isSafeToReload = true; // Activate VIP Pass
-                    window.location.href = fixturesUrl;
-                }
-            })
-            .catch(error => console.error('Error checking match status:', error));
-    }, 3000);
-
-    // ==========================================
-    // 🛡️ SCORER LOCKDOWN ENGINE
-    // ==========================================
-    
-    // 1. Trap the Phone's physical "Back" button or Swipe gesture
-    history.pushState(null, null, location.href);
-    window.addEventListener('popstate', function () {
-        if (!isMatchOfficiallyOver) {
-            history.pushState(null, null, location.href);
-            flashToast("Warning", "Navigating away is disabled during an active match!", "danger");
-        }
-    });
-
-    // 2. The Final Fix: Respect the VIP Pass!sub
-    window.addEventListener('beforeunload', function (e) {
-        if (!isMatchOfficiallyOver && !isSafeToReload) {
-            e.preventDefault(); 
-            e.returnValue = ''; 
-        }
-    });
-
 </script>
+
 </body>
 </html>
