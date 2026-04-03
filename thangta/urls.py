@@ -79,6 +79,8 @@ path('match/<int:match_id>/status/', check_match_status, name='check-match-statu
 path('match/<int:match_id>/stream/', match_sse_stream, name='match-sse-stream'),
 path('match/<int:match_id>/flag-live-score/', flag_live_score, name='flag-live-score'),
 
+path('match/<int:match_id>/watch/',public_live_match, name='public-live-match'),
+
 
 
 

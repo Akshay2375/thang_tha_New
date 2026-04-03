@@ -49,7 +49,7 @@ class TournamentDashboardView(TemplateView):
 
         return context
 
-@login_required(login_url='login')
+# @login_required(login_url='login')
 def tournament_results(request, tournament_id):
     """Publicly viewable results for completed matches."""
     tournament = get_object_or_404(Tournament, id=tournament_id)
@@ -829,7 +829,12 @@ from django.urls import reverse
 from django.contrib import messages
 from .models import Match, Score 
 
-# @scorer_required
+from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
+from django.contrib import messages
+from .models import Match, Score 
+
+@scorer_required
 def scorer_panel(request, match_id):
     """The scoring panel that securely locks the scorer into their chosen corner."""
     match = get_object_or_404(Match, id=match_id)
@@ -902,6 +907,8 @@ def scorer_panel(request, match_id):
         'total_score': 0,
         'db_score_count': 0, 
     })
+    
+    
     
 from django.http import HttpResponse
 
@@ -1643,3 +1650,18 @@ def flag_live_score(request, match_id):
     if success:
         return JsonResponse({'status': 'success'})
     return JsonResponse({'status': 'error', 'message': 'Score not found in active memory.'}, status=400)
+
+
+
+# No decorators here! Open to the public.
+def public_live_match(request, match_id):
+    match = get_object_or_404(Match, id=match_id)
+    
+    # If the match isn't active, don't let them stare at a blank screen
+    if not match.is_active and not match.is_completed:
+        messages.info(request, "This match is not live yet.")
+        return redirect('tournament-matches', tournament_id=match.tournament.id)
+
+    return render(request, 'public_live_match.html', {
+        'match': match,
+    })

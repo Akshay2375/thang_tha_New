@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIVE: Ring {{ match.ring_number }} - Match {{ match.match_sequence }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        body, html {
+            height: 100%;
+            background-color: #0f172a; /* Deep dark stadium background */
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow-x: hidden;
+        }
+        
+        .scoreboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        /* The Live Pulsing Badge */
+        .live-badge {
+            display: inline-block;
+            background-color: #ef4444;
+            color: white;
+            font-weight: bold;
+            letter-spacing: 2px;
+            padding: 0.5rem 1.5rem;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Category Header */
+        .match-header {
+            text-align: center;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 1rem;
+        }
+        
+        .match-header h2 {
+            font-weight: 800;
+            color: #cbd5e1;
+            margin: 0;
+            font-size: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .category-text {
+            color: #94a3b8;
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        /* The Score Cards */
+        .corner-card {
+            border-radius: 20px;
+            padding: 2rem;
+            text-align: center;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .red-corner {
+            background: linear-gradient(145deg, #7f1d1d 0%, #b91c1c 100%);
+            border: 2px solid #f87171;
+            box-shadow: 0 10px 30px rgba(185, 28, 28, 0.3);
+        }
+        
+        .blue-corner {
+            background: linear-gradient(145deg, #1e3a8a 0%, #1d4ed8 100%);
+            border: 2px solid #60a5fa;
+            box-shadow: 0 10px 30px rgba(29, 78, 216, 0.3);
+        }
+
+        .fighter-name {
+            font-size: 2.5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+            line-height: 1.1;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .fighter-district {
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.8);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 1rem;
+        }
+
+        .big-score {
+            font-size: 8rem;
+            font-weight: 900;
+            line-height: 1;
+            margin: 1rem 0;
+            text-shadow: 4px 4px 10px rgba(0,0,0,0.5);
+            font-variant-numeric: tabular-nums; /* Keeps numbers from shifting */
+        }
+
+        /* Center Display (Rounds) */
+        .center-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #1e293b;
+            border-radius: 15px;
+            padding: 1.5rem;
+            border: 1px solid #475569;
+            height: 100%;
+        }
+
+        .round-label {
+            color: #94a3b8;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 0.5rem;
+        }
+
+        .round-number {
+            font-size: 4rem;
+            font-weight: 800;
+            color: #f8fafc;
+            line-height: 1;
+        }
+        
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            .fighter-name { font-size: 1.8rem; }
+            .big-score { font-size: 5rem; }
+            .round-number { font-size: 3rem; }
+            .center-display { margin: 1.5rem 0; padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="scoreboard-container" id="live-scoreboard-data">
+    
+    <div class="text-center mb-4">
+        {% if match.is_completed %}
+            <span class="badge bg-secondary fs-5 px-4 py-2 rounded-pill">Match Completed</span>
+        {% elif match.is_active %}
+            <div class="live-badge">🔴 Live Broadcast</div>
+        {% else %}
+            <span class="badge bg-warning text-dark fs-5 px-4 py-2 rounded-pill">Waiting to Start</span>
+        {% endif %}
+    </div>
+
+    <div class="match-header">
+        <h2>RING {{ match.ring_number }} • MATCH {{ match.match_sequence }}</h2>
+        <div class="category-text">
+            {{ match.event_type }} | {{ match.gender }} | {{ match.age_display }} | {{ match.weight_display }}
+        </div>
+    </div>
+
+    <div class="row align-items-center g-4">
+        
+        <div class="col-12 col-md-5">
+            <div class="corner-card red-corner">
+                <div class="fighter-name">{{ match.participant_red.name|default:"TBD" }}</div>
+                <div class="fighter-district">{{ match.participant_red.district|default:"---" }}</div>
+                
+                <div class="big-score">
+                    {{ match.score_red|default:"0" }}
+                </div>
+                
+                {% if match.winner == match.participant_red %}
+                    <div class="mt-3">
+                        <span class="badge bg-white text-danger fs-5 px-4 py-2 rounded-pill shadow">WINNER</span>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="col-12 col-md-2">
+            <div class="center-display shadow">
+                <div class="round-label">Round</div>
+                <div class="round-number">
+                    {% if match.current_round == 3 or match.current_round == '3' %}
+                        TIE
+                    {% else %}
+                        {{ match.current_round|default:"1" }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-5">
+            <div class="corner-card blue-corner">
+                {% if match.participant_blue %}
+                    <div class="fighter-name">{{ match.participant_blue.name }}</div>
+                    <div class="fighter-district">{{ match.participant_blue.district|default:"---" }}</div>
+                    
+                    <div class="big-score">
+                        {{ match.score_blue|default:"0" }}
+                    </div>
+                    
+                    {% if match.winner == match.participant_blue %}
+                        <div class="mt-3">
+                            <span class="badge bg-white text-primary fs-5 px-4 py-2 rounded-pill shadow">WINNER</span>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="fighter-name text-white-50">BYE</div>
+                    <div class="fighter-district text-white-50">NO OPPONENT</div>
+                    <div class="big-score text-white-50">-</div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+    
+    <div class="text-center mt-5">
+        <a href="{% url 'global-fixtures'  %}" class="btn btn-outline-light px-5 py-2" style="border-radius: 8px;">
+            ← Back to Fixtures
+        </a>
+    </div>
+
+</div>
+
+<script>
+    // This script silently fetches the latest HTML for this page every 3 seconds
+    // and seamlessly updates the scoreboard without flickering or flashing the screen!
+    
+    let isMatchComplete = "{{ match.is_completed }}" === "True";
+    
+    function fetchLatestScores() {
+        if (isMatchComplete) return; // Stop fetching if the match is officially over
+
+        fetch(window.location.href, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.text())
+        .then(html => {
+            // Create a fake DOM to parse the new HTML
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            
+            // Find the new scoreboard container
+            const newScoreboard = doc.getElementById('live-scoreboard-data');
+            const currentScoreboard = document.getElementById('live-scoreboard-data');
+            
+            // Swap the old content with the new content seamlessly
+            if (newScoreboard && currentScoreboard) {
+                currentScoreboard.innerHTML = newScoreboard.innerHTML;
+            }
+        })
+        .catch(err => console.error("Could not fetch live scores", err));
+    }
+
+    // Refresh the scores every 3 seconds
+    if (!isMatchComplete) {
+        setInterval(fetchLatestScores, 3000);
+    }
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

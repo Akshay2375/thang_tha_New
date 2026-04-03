@@ -15,7 +15,7 @@
     </style>
 </head>
 <body class="p-4 bg-light">
-
+ {% include 'partials/navbar.html' %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 m-0 fw-bold">Participants</h1>
@@ -37,10 +37,10 @@
                 <label class="form-label text-muted small fw-bold">Weight Category</label>
                 {{ filter_form.weight_category|add_class:"form-select" }}
             </div>
-            <div class="col-md-2">
+            <!-- <div class="col-md-2">
                 <label class="form-label text-muted small fw-bold">District</label>
                 {{ filter_form.district|add_class:"form-select" }}
-            </div>
+            </div> -->
             <div class="col-md-2">
                 <label class="form-label text-muted small fw-bold">Event Type</label>
                 {{ filter_form.event_type|add_class:"form-select" }}
