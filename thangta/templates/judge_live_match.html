@@ -167,20 +167,18 @@
         });
     }
 
-    // 3. The Matrix Rendering Engine
-    // 3. The Matrix Rendering Engine
+ // 3. The Matrix Rendering Engine
     function renderMatrix(state) {
-        const roundData = state[currentRound];
-        if (!roundData || !roundData.subrounds) return;
-
-        const subrounds = roundData.subrounds;
         
+        // 🚨 THE FIX: Safe fallback for empty rounds (Only declare these ONCE)
+        const roundData = state[currentRound] || { subrounds: {} };
+        const subrounds = roundData.subrounds || {};
+
         // Find how many subrounds exist to build the columns
         const srKeys = Object.keys(subrounds).map(Number).sort((a, b) => a - b);
         const maxSr = srKeys.length > 0 ? srKeys[srKeys.length - 1] : 1;
-
-        let totalRedFloor = 0;
-        let totalBlueFloor = 0;
+        
+        // ... (Keep the rest of your code here!)
 
         ['red', 'blue'].forEach(corner => {
             let headerHtml = `<th class="bg-light text-dark">Scorer</th>`;
@@ -189,32 +187,30 @@
             // Collect unique scorers for this corner
             const scorerIds = new Set();
             for (let i = 1; i <= maxSr; i++) {
-                // 🚨 NEW: Changed "SR" to "Subround"
                 headerHtml += `<th class="bg-light">Subround ${i}</th>`;
                 if (subrounds[i] && subrounds[i][corner]) {
                     Object.keys(subrounds[i][corner].scorers).forEach(id => scorerIds.add(id));
-                    
-                    if (subrounds[i][corner].status === 'COMPLETE') {
-                        if (corner === 'red') totalRedFloor += subrounds[i][corner].final_score;
-                        if (corner === 'blue') totalBlueFloor += subrounds[i][corner].final_score;
-                    }
                 }
             }
 
             // Build the rows for each Scorer
             Array.from(scorerIds).forEach(scorerId => {
-                // 🚨 NEW: Find the Scorer's actual name from the data payload
-                let displayName = `Scorer ${scorerId}`; // Fallback just in case
+                
+                // 1. Start with a safe default
+                let displayName = `SCORER ${scorerId}`; 
+
+                // 2. Dig through the subrounds to find their actual real name
                 for (let i = 1; i <= maxSr; i++) {
                     if (subrounds[i] && subrounds[i][corner] && subrounds[i][corner].scorers[scorerId]) {
                         if (subrounds[i][corner].scorers[scorerId].name) {
-                            displayName = subrounds[i][corner].scorers[scorerId].name;
+                            // Found it! Make it uppercase and stop searching
+                            displayName = subrounds[i][corner].scorers[scorerId].name.toUpperCase();
                             break; 
                         }
                     }
                 }
 
-                // 🚨 NEW: Print the Scorer's Name
+                // Print the Scorer's Name
                 bodyHtml += `<tr><td class="fw-bold text-muted bg-light text-uppercase">${displayName}</td>`;
                 
                 for (let i = 1; i <= maxSr; i++) {
@@ -257,12 +253,33 @@
             document.getElementById(`matrix-${corner}-body`).innerHTML = bodyHtml || `<tr><td colspan="${maxSr+1}" class="text-muted py-3">No scores yet</td></tr>`;
         });
 
-        // Update the Giant Score Boxes
-        const rScore = document.getElementById('red-score');
-        if (rScore) rScore.innerText = totalRedFloor;
+        // ==========================================
+        // 🚨 THE GRAND TOTAL CALCULATOR
+        // ==========================================
+        let grandTotalRed = 0;
+        let grandTotalBlue = 0;
+
+        // Loop through EVERY round in the RAM memory (Round 1, Round 2, etc.)
+        for (const [rNum, rData] of Object.entries(state)) {
+            if (!rData.subrounds) continue;
+            
+            for (const [srNum, srData] of Object.entries(rData.subrounds)) {
+                // Only add points if the subround is officially COMPLETE
+                if (srData.red && srData.red.status === 'COMPLETE') {
+                    grandTotalRed += srData.red.final_score;
+                }
+                if (srData.blue && srData.blue.status === 'COMPLETE') {
+                    grandTotalBlue += srData.blue.final_score;
+                }
+            }
+        }
+
+        // Update the Giant Score Boxes with the cumulative match total
+        const rScore = document.getElementById('red-score') || document.querySelector('.red-corner .big-score');
+        if (rScore) rScore.innerText = grandTotalRed;
         
-        const bScore = document.getElementById('blue-score');
-        if (bScore) bScore.innerText = totalBlueFloor;
+        const bScore = document.getElementById('blue-score') || document.querySelector('.blue-corner .big-score');
+        if (bScore) bScore.innerText = grandTotalBlue;
     }
 </script>
 </body>

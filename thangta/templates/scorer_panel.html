@@ -58,7 +58,12 @@
 <body>
 
 <div id="feedback-toast" class="alert fw-bold px-5 py-3 shadow-lg rounded-pill"></div>
-
+<div id="round-lock-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; color: white; text-align: center; flex-direction: column; justify-content: center; align-items: center;">
+    <h1 style="font-size: 3.5rem; color: #ffeb3b; font-weight: bold; margin-bottom: 20px;">
+        🚨 ROUND <span id="new-round-num"></span> STARTING 🚨
+    </h1>
+    <h3 style="color: #ffffff;">Locking panel & syncing data...</h3>
+</div>
 <div class="page-container">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <span class="fw-bold text-muted">Ring {{ match.ring_number }} • Match {{ match.match_sequence }}</span>
@@ -175,7 +180,11 @@
 
 <script>
     // --- 1. CORE VARIABLES ---
+    // --- 1. CORE VARIABLES ---
+    const currentViewedRound = parseInt("{{ match.current_round|default:1 }}"); // <-- ADD THIS LINE
     let pendingScores = [];
+    // ...
+   
     let selectedFoulType = null;
     let currentActiveSubRound = parseInt("{{ current_sub_round|default:1 }}");
     let isMatchOfficiallyOver = false;
@@ -197,24 +206,48 @@
     });
 
     // --- 3. AUTO-ADVANCE & STATUS CHECK ---
+
+    
     function checkMatchStatus() {
-        fetch(`/match/{{ match.id }}/status/`)
+         const cacheBuster = new Date().getTime();
+        
+        fetch(`/match/{{ match.id }}/status/?t=${cacheBuster}`, { cache: "no-store" }) 
             .then(response => response.json())
             .then(data => {
-                // 🚨 FIXED: 'true' must be lowercase in Javascript!
+                
+               
+                
                 if (data.is_completed === true || data.status === 'completed') {
                     isMatchOfficiallyOver = true; 
-                    flashToast("success", "Match Over! Redirecting...", "success");
+                    document.getElementById('new-round-num').innerText = "OVER";
+                    document.getElementById('new-round-num').parentElement.innerHTML = "🏁 MATCH COMPLETE 🏁";
+                    document.getElementById('round-lock-overlay').style.display = "flex";
+                    
                     setTimeout(() => {
                         window.location.href = "{% url 'scorer-dashboard' %}";
                     }, 2000);
+                    return;
+                }
+
+                
+                if (data.current_round && parseInt(data.current_round) > currentViewedRound) {
+                    document.getElementById('new-round-num').innerText = data.current_round;
+                    document.getElementById('round-lock-overlay').style.display = "flex";
+
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2500);
                 }
             })
             .catch(err => console.log("Status check failed", err));
     }
-    setInterval(checkMatchStatus, 5000);
 
-    // --- 4. UI INTERACTION FUNCTIONS (Buttons & Fouls) ---
+
+ 
+    setInterval(checkMatchStatus, 3000);
+     
+
+
     function updateUI() {
         if (selectedFoulType) {
             document.getElementById('ui-sequence').innerText = 'FOUL';

@@ -160,8 +160,7 @@ class Match(models.Model):
     # ==========================================
     # 🚨 NEW: THE DATABASE SCORE CHECKPOINTS 
     # ==========================================
-    score_red = models.IntegerField(default=0)
-    score_blue = models.IntegerField(default=0)
+    
     
     round_1_red = models.IntegerField(default=0)
     round_1_blue = models.IntegerField(default=0)
@@ -184,6 +183,18 @@ class Match(models.Model):
         if self.weight_category and "Kg" not in str(self.weight_category):
             return f"{self.weight_category} Kg"
         return self.weight_category
+    
+    # Add this to the bottom of your Match class in models.py
+    
+    @property
+    def grand_total_red(self):
+        """Bulletproof math: Simply adds the finalized round columns together."""
+        return (self.round_1_red or 0) + (self.round_2_red or 0) + (self.round_3_red or 0)
+
+    @property
+    def grand_total_blue(self):
+        """Bulletproof math: Simply adds the finalized round columns together."""
+        return (self.round_1_blue or 0) + (self.round_2_blue or 0) + (self.round_3_blue or 0)
 
     @property
     def full_category_name(self):

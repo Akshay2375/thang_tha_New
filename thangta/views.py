@@ -1100,7 +1100,7 @@ def fetch_foul_history(request, match_id):
 
 @judge_required
 def update_match_winner(request, match_id):
-    """Manually declares a winner, calculates final scores, flushes temp data, and auto-generates next round."""
+    """Manually declares a winner, burns RAM scores to database, and auto-generates next round."""
     match = get_object_or_404(Match, id=match_id)
     
     if match.is_completed:
@@ -1114,28 +1114,50 @@ def update_match_winner(request, match_id):
             if winner == match.participant_red or winner == match.participant_blue:
                 
                 # ==========================================
-                # 🚨 NEW: CALCULATE, SAVE, AND FLUSH LOGIC 🚨
+                # 🚨 NEW: BURN THE RAM MATH INTO THE DATABASE
                 # ==========================================
+                match_state = state.get_or_create_match_state(match_id)
                 
-                # 1. Calculate final mathematically perfect scores from the temp DB
-                final_red = calculate_corner_score(match, match.participant_red)
-                final_blue = calculate_corner_score(match, match.participant_blue)
+                grand_red = 0
+                grand_blue = 0
                 
-                # 2. Save everything to the permanent Match record
-                match.score_red = final_red      # Ensure your Match model has this field!
-                match.score_blue = final_blue    # Ensure your Match model has this field!
+                for r_num, r_data in match_state.get('rounds', {}).items():
+                    r_red = 0
+                    r_blue = 0
+                    for sr_num, sr_data in r_data.get('subrounds', {}).items():
+                        if sr_data.get('red', {}).get('status') == 'COMPLETE':
+                            r_red += sr_data['red']['final_score']
+                        if sr_data.get('blue', {}).get('status') == 'COMPLETE':
+                            r_blue += sr_data['blue']['final_score']
+                    
+                    # Burn the Round Totals into the database columns
+                    if str(r_num) == '1':
+                        match.round_1_red = r_red
+                        match.round_1_blue = r_blue
+                    elif str(r_num) == '2':
+                        match.round_2_red = r_red
+                        match.round_2_blue = r_blue
+                    elif str(r_num) == '3':
+                        match.round_3_red = r_red
+                        match.round_3_blue = r_blue
+                        
+                    grand_red += r_red
+                    grand_blue += r_blue
+                    
+                # Burn the Grand Totals
+                match.score_red = grand_red
+                match.score_blue = grand_blue
+                # ==========================================
+
+                # Finalize the match state
                 match.winner = winner
                 match.is_completed = True
+                match.is_active = False
                 match.save()
                 
-                # 3. THE CLEANUP (The Flush)
-                # Wipe the temporary sub-round click data to keep the database light!
-                Score.objects.filter(match=match).delete()
-                
-                # ==========================================
-                
-                # ... (The rest of your excellent auto-generation logic remains untouched) ...
-                
+                # 🚨 NOTE: I deleted the line that was erasing all the Score objects!
+                # The historical database is now safe.
+
                 category_matches = Match.objects.filter(
                     tournament=match.tournament, event_type=match.event_type,
                     gender=match.gender, age_category=match.age_category,
@@ -1150,13 +1172,13 @@ def update_match_winner(request, match_id):
                             gender=match.gender, current_round=match.round_number, ring_number=match.ring_number
                         )
                         if success:
-                            messages.success(request, f"🏆 {winner.name} wins ({final_red} - {final_blue})! Round {match.round_number + 1} automatically generated!")
+                            messages.success(request, f"🏆 {winner.name} wins ({grand_red} - {grand_blue})! Round {match.round_number + 1} automatically generated!")
                             url = reverse('tournament-matches', args=[match.tournament.id])
                             return redirect(f"{url}?round={match.round_number + 1}")
                     else:
-                        messages.success(request, f"🏆 {winner.name} wins the Final ({final_red} - {final_blue})! Category Complete.")
+                        messages.success(request, f"🏆 {winner.name} wins the Final ({grand_red} - {grand_blue})! Category Complete.")
                 else:
-                    messages.success(request, f"🏆 {winner.name} declared as the winner ({final_red} - {final_blue})!")
+                    messages.success(request, f"🏆 {winner.name} declared as the winner ({grand_red} - {grand_blue})!")
                 
                 url = reverse('tournament-matches', args=[match.tournament.id])
                 return redirect(f"{url}?round={match.round_number}")
@@ -1164,6 +1186,7 @@ def update_match_winner(request, match_id):
                 messages.error(request, "Invalid winner selected.")
 
     return render(request, 'match_update_score.html', {'match': match})
+
 
 
 from django.db.models import Avg
@@ -1437,20 +1460,19 @@ def delete_participant_coach(request, participant_id):
         'participant': participant
     })
     
-    
+ 
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from .models import Match
 
 def check_match_status(request, match_id):
-    """A lightweight endpoint for the scorer's phone to ping."""
+    """A high-speed endpoint for the scorer panel to check the current round."""
     match = get_object_or_404(Match, id=match_id)
-    
     return JsonResponse({
-        'is_completed': match.is_completed
-    })
-    
-    
+    'is_completed': match.is_completed,
+    'status': 'completed' if match.is_completed else 'active',
+    'current_round': match.current_round   
+})
     
     
     # =====================
@@ -1602,25 +1624,25 @@ def submit_score(request, match_id):
             total_blue += r_totals['blue']
 
         # Save Grand Totals
-        match.score_red = total_red    
-        match.score_blue = total_blue  
+        # match.score_red = total_red    
+        # match.score_blue = total_blue  
         
         # Save Round 1
-        if hasattr(match, 'round_1_red'): 
-            match.round_1_red = round_totals[1]['red']
-            match.round_1_blue = round_totals[1]['blue']
+        # if hasattr(match, 'round_1_red'): 
+        #     match.round_1_red = round_totals[1]['red']
+        #     match.round_1_blue = round_totals[1]['blue']
             
-        # Save Round 2
-        if hasattr(match, 'round_2_red'): 
-            match.round_2_red = round_totals[2]['red']
-            match.round_2_blue = round_totals[2]['blue']
+        # # Save Round 2
+        # if hasattr(match, 'round_2_red'): 
+        #     match.round_2_red = round_totals[2]['red']
+        #     match.round_2_blue = round_totals[2]['blue']
             
-        # Save Round 3 (Tie Breaker)
-        if hasattr(match, 'round_3_red'): 
-            match.round_3_red = round_totals[3]['red']
-            match.round_3_blue = round_totals[3]['blue']
+        # # Save Round 3 (Tie Breaker)
+        # if hasattr(match, 'round_3_red'): 
+        #     match.round_3_red = round_totals[3]['red']
+        #     match.round_3_blue = round_totals[3]['blue']
             
-        match.save() # THIS LOCKS IT IN!
+        # match.save() # THIS LOCKS IT IN!
 
     # We return the subround_completed flag so the Scorer's phone knows if it advanced
     return JsonResponse({'status': 'success', 'subround_completed': newly_completed})

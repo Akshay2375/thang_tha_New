@@ -81,7 +81,8 @@
             </div>
         </div>
 
-        <h5 class="fw-bold text-dark mb-3">Live Average Scores</h5>
+        <!-- <h5 class="fw-bold text-dark mb-3">Live Average Scores</h5> -->
+       <h5 class="fw-bold text-dark mb-3">Total Match Score</h5>
         <div class="row g-4 mb-5">
             <div class="col-md-6">
                 <div class="card border-0 shadow-lg text-white text-center py-4 grad-red rounded-4">
@@ -90,8 +91,10 @@
                             <span class="d-inline-block rounded-circle bg-white opacity-50 me-2" style="width: 12px; height: 12px;"></span>
                             Red Corner
                         </h5>
-                        <h1 class="display-1 fw-bold mb-0" style="font-size: 5rem; letter-spacing: -2px;">{{ match.score_red|default:"0" }}</h1>
-                        <p class="mt-2 mb-0 fw-semibold" style="color: #ffcccc;">Average Score</p>
+                        
+                       <h1 class="display-1 fw-bold mb-0" style="font-size: 5rem; letter-spacing: -2px;">{{ match.grand_total_red }}</h1>
+                        
+                        <p class="mt-2 mb-0 fw-semibold" style="color: #ffcccc;">Total Score</p>
                     </div>
                 </div>
             </div>
@@ -103,8 +106,18 @@
                             <span class="d-inline-block rounded-circle bg-white opacity-50 me-2" style="width: 12px; height: 12px;"></span>
                             Blue Corner
                         </h5>
-                        <h1 class="display-1 fw-bold mb-0" style="font-size: 5rem; letter-spacing: -2px;">{{ match.score_blue|default:"0" }}</h1>
-                        <p class="mt-2 mb-0 fw-semibold" style="color: #bfdbfe;">Average Score</p>
+                        
+                        <h1 class="display-1 fw-bold mb-0" style="font-size: 5rem; letter-spacing: -2px;">
+                            {% if match.participant_blue %}
+                                {{ match.grand_total_blue }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </h1>
+                                                
+                        <p class="mt-2 mb-0 fw-semibold" style="color: #bfdbfe;">
+                            {% if match.participant_blue %}Total Score{% else %}BYE{% endif %}
+                        </p>
                     </div>
                 </div>
             </div>

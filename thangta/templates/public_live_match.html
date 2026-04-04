@@ -238,40 +238,55 @@
 </div>
 
 <script>
-    // This script silently fetches the latest HTML for this page every 3 seconds
-    // and seamlessly updates the scoreboard without flickering or flashing the screen!
-    
+    const matchId = "{{ match.id }}";
     let isMatchComplete = "{{ match.is_completed }}" === "True";
-    
-    function fetchLatestScores() {
-        if (isMatchComplete) return; // Stop fetching if the match is officially over
 
-        fetch(window.location.href, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => response.text())
-        .then(html => {
-            // Create a fake DOM to parse the new HTML
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            
-            // Find the new scoreboard container
-            const newScoreboard = doc.getElementById('live-scoreboard-data');
-            const currentScoreboard = document.getElementById('live-scoreboard-data');
-            
-            // Swap the old content with the new content seamlessly
-            if (newScoreboard && currentScoreboard) {
-                currentScoreboard.innerHTML = newScoreboard.innerHTML;
-            }
-        })
-        .catch(err => console.error("Could not fetch live scores", err));
-    }
-
-    // Refresh the scores every 3 seconds
+    // Only connect to the live stream if the match is still active
     if (!isMatchComplete) {
-        setInterval(fetchLatestScores, 3000);
+        const evtSource = new EventSource("{% url 'match-sse-stream' match.id %}");
+        
+        evtSource.onmessage = function(event) {
+            // Ignore the silent heartbeat
+            if (event.data.trim() === ": heartbeat") return; 
+
+            const payload = JSON.parse(event.data);
+            
+            if (payload.state) {
+                let grandTotalRed = 0;
+                let grandTotalBlue = 0;
+
+                // Loop through the high-speed RAM state to get the Grand Total
+                for (const [rNum, rData] of Object.entries(payload.state)) {
+                    if (!rData.subrounds) continue;
+                    
+                    for (const [srNum, srData] of Object.entries(rData.subrounds)) {
+                        if (srData.red && srData.red.status === 'COMPLETE') {
+                            grandTotalRed += srData.red.final_score;
+                        }
+                        if (srData.blue && srData.blue.status === 'COMPLETE') {
+                            grandTotalBlue += srData.blue.final_score;
+                        }
+                    }
+                }
+
+                // Instantly update the massive numbers on the screen!
+                const redScoreEl = document.querySelector('.red-corner .big-score');
+                if (redScoreEl) redScoreEl.innerText = grandTotalRed;
+                
+                const blueScoreEl = document.querySelector('.blue-corner .big-score');
+                if (blueScoreEl) blueScoreEl.innerText = grandTotalBlue;
+            }
+        };
+
+        evtSource.onerror = function(err) {
+            console.log("SSE Connection lost. It will auto-reconnect.");
+        };
+        
+        // Auto-refresh the page once every 30 seconds just as a safety net 
+        // to catch Round changes or Match Completions from the database
+        setInterval(() => {
+            window.location.reload();
+        }, 30000);
     }
 </script>
 

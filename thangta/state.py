@@ -1,27 +1,95 @@
 import threading
 import math
+import queue
+import json
 
-# Global lock to ensure thread safety when multiple scorers submit at the exact same millisecond
+# ==========================================
+# 🚨 THE GLOBAL RAM MEMORY & LOCK
+# ==========================================
+# This dictionary is your "RAM". It stays alive as long as the server is running.
+active_matches = {}
+
+# This lock prevents two scorers from saving at the exact same millisecond
 state_lock = threading.Lock()
 
-# The global in-memory state dictionary
-# Structure: matches_state[match_id]['rounds'][round_num]['subrounds'][subround_num][corner]['scorers'][scorer_id]
-matches_state = {}
+# ==========================================
+# DATABASE HYDRATION
+# ==========================================
+def hydrate_match_from_db(match_id, match_state):
+    """Pulls all historical scores from the database and rebuilds the RAM matrix."""
+    from .models import Score, Match 
+    
+    try:
+        match = Match.objects.get(id=match_id)
+        historical_scores = Score.objects.filter(match=match).order_by('round_num', 'sub_round', 'timestamp')
+    except Exception:
+        return 
 
-def get_or_create_match_state(match_id):
-    if match_id not in matches_state:
-        matches_state[match_id] = {
-            'rounds': {1: {'subrounds': {}}, 2: {'subrounds': {}}, 3: {'subrounds': {}}},
-            'clients': [] # We will store SSE queues here in Step 2
+    for score in historical_scores:
+        r_num = str(score.round_num)
+        sr_num = str(score.sub_round)
+        
+        if score.participant_id == match.participant_red_id:
+            corner = 'red'
+        else:
+            corner = 'blue'
+            
+        sr_state = get_or_create_subround(match_state, r_num, sr_num)
+        corner_state = sr_state[corner]
+        
+        actual_score = 0 if score.is_foul else score.points
+        actual_foul = score.points if score.is_foul else 0
+       # THE NEW WAY
+        scorer_name = score.scorer.get_full_name() or score.scorer.username if score.scorer else f"Scorer {score.scorer_id}"
+        corner_state['scorers'][score.scorer_id] = {
+            'name': scorer_name,
+            'score': actual_score,
+            'foul': actual_foul,
+            'flagged': score.is_flagged
         }
-    return matches_state[match_id]
+        
+        submissions = list(corner_state['scorers'].values())
+        if len(submissions) == 3:
+            corner_state['status'] = 'COMPLETE'
+            
+            foul_count = sum(1 for s in submissions if s['foul'] < 0)
+            final_foul_penalty = -3 if foul_count == 3 else 0
+            
+            total_points = sum(s['score'] for s in submissions)
+            average_points = total_points // 3  
+            
+            corner_state['final_score'] = average_points + final_foul_penalty
+
+# ==========================================
+# RAM STATE MANAGEMENT
+# ==========================================
+def get_or_create_match_state(match_id):
+    """Gets the RAM state. If it's empty, it builds it and hydrates it!"""
+    str_id = str(match_id)
+    
+    if str_id not in active_matches:
+        active_matches[str_id] = {
+            'rounds': {},
+            'clients': []  # 🚨 FIXED: Now the broadcaster has a place to put connected Judges!
+        }
+        hydrate_match_from_db(match_id, active_matches[str_id])
+        
+    return active_matches[str_id]
 
 def get_or_create_subround(match_state, round_num, subround):
+    # 🚨 NEW: Create the Round folder if it doesn't exist yet!
+    if round_num not in match_state['rounds']:
+        match_state['rounds'][round_num] = {
+            'subrounds': {}
+        }
+        
     round_state = match_state['rounds'][round_num]
+    
+    # Now it is safe to check for the subround
     if subround not in round_state['subrounds']:
         round_state['subrounds'][subround] = {
             'red': {
-                'scorers': {}, # Format: scorer_id: {'score': int, 'foul': int, 'flagged': bool}
+                'scorers': {}, 
                 'status': 'PENDING',
                 'final_score': 0,
                 'final_foul': 0
@@ -34,7 +102,10 @@ def get_or_create_subround(match_state, round_num, subround):
             }
         }
     return round_state['subrounds'][subround]
-# UPDATE THIS FUNCTION IN state.py
+
+
+
+
 def submit_scorer_data(match_id, round_num, subround, corner, scorer_id, scorer_name, score, foul=0):
     """Called when a scorer submits their score."""
     with state_lock:
@@ -45,7 +116,6 @@ def submit_scorer_data(match_id, round_num, subround, corner, scorer_id, scorer_
         if corner_state['status'] == 'COMPLETE':
             return False, match_state
 
-        # 🚨 NEW: Record the scorer's actual name along with their input
         corner_state['scorers'][scorer_id] = {
             'name': scorer_name,
             'score': score,
@@ -53,44 +123,34 @@ def submit_scorer_data(match_id, round_num, subround, corner, scorer_id, scorer_
             'flagged': False
         }
 
-        # Check if all 3 scorers have submitted
         newly_completed = False
-        if len(corner_state['scorers']) == 3:
-            _finalize_corner_subround(corner_state)
+        submissions = list(corner_state['scorers'].values())
+
+        if len(submissions) == 3:
+            corner_state['status'] = 'COMPLETE'
             newly_completed = True
 
-        event_name = 'SUBROUND_COMPLETE' if newly_completed else 'SCORER_SUBMITTED'
-        
+            foul_count = sum(1 for s in submissions if s['foul'] < 0)
+            final_foul_penalty = -3 if foul_count == 3 else 0
+
+            total_points = sum(s['score'] for s in submissions)
+            average_points = total_points // 3  
+
+            corner_state['final_score'] = average_points + final_foul_penalty
+
+    event_name = 'SUBROUND_COMPLETE' if newly_completed else 'SCORER_SUBMITTED'
     broadcast_match_update(match_id, event_name)
-    return newly_completed, match_state
-
-
-
-def _finalize_corner_subround(corner_state):
-    """Calculates the floor average and applies the 3/3 foul rule."""
-    scorers_data = list(corner_state['scorers'].values())
     
-    # 1. Calculate floor of average score
-    total_score = sum(s['score'] for s in scorers_data)
-    corner_state['final_score'] = math.floor(total_score / 3.0)
-
-    # 2. Foul Logic: Only apply if ALL 3 scorers gave the EXACT same foul value
-    foul_values = [s['foul'] for s in scorers_data]
-    if len(set(foul_values)) == 1 and foul_values[0] < 0:
-        # All 3 submitted the same foul
-        corner_state['final_foul'] = foul_values[0]
-    else:
-        # Disagreement or no foul -> ignored
-        corner_state['final_foul'] = 0
-
-    corner_state['status'] = 'COMPLETE'
+    return newly_completed, match_state
 
 def flag_score(match_id, round_num, subround, corner, scorer_id):
     """Called by the judge to flag a specific scorer's input."""
     success = False
+    str_id = str(match_id)
     with state_lock:
         try:
-            corner_state = matches_state[match_id]['rounds'][round_num]['subrounds'][subround][corner]
+            # 🚨 FIXED: Changed matches_state to active_matches
+            corner_state = active_matches[str_id]['rounds'][round_num]['subrounds'][subround][corner]
             if scorer_id in corner_state['scorers']:
                 current_flag = corner_state['scorers'][scorer_id]['flagged']
                 corner_state['scorers'][scorer_id]['flagged'] = not current_flag
@@ -99,20 +159,14 @@ def flag_score(match_id, round_num, subround, corner, scorer_id):
             pass
             
     if success:
-        # 🚨 NEW: Broadcast the flag update!
         broadcast_match_update(match_id, 'SCORE_FLAGGED')
-        return True, matches_state[match_id]
+        return True, active_matches[str_id]
         
     return False, None
     
-    
-import queue # Add this to the very top of state.py if it isn't there!
-import json
-
 # ==========================================
 # SSE BROADCASTER LOGIC
 # ==========================================
-
 def register_client(match_id):
     """Creates a unique listening queue for a new Judge connection."""
     with state_lock:
@@ -123,22 +177,24 @@ def register_client(match_id):
 
 def remove_client(match_id, client_queue):
     """Removes the queue when the Judge closes their browser."""
+    str_id = str(match_id)
     with state_lock:
         try:
-            matches_state[match_id]['clients'].remove(client_queue)
+            # 🚨 FIXED: Changed matches_state to active_matches
+            active_matches[str_id]['clients'].remove(client_queue)
         except (KeyError, ValueError):
             pass
 
 def broadcast_match_update(match_id, event_type):
     """Pushes the ENTIRE current match state to all connected Judges."""
+    str_id = str(match_id)
     with state_lock:
-        if match_id in matches_state:
-            # We send the whole state so the Judge's matrix is always perfectly synced
+        # 🚨 FIXED: Changed matches_state to active_matches
+        if str_id in active_matches:
             payload = {
                 'type': event_type,
-                'state': matches_state[match_id]['rounds']
+                'state': active_matches[str_id]['rounds']
             }
             
-            # Send to every connected judge
-            for q in matches_state[match_id]['clients']:
+            for q in active_matches[str_id]['clients']:
                 q.put(payload)
