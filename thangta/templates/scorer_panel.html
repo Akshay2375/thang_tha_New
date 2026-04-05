@@ -212,44 +212,55 @@
  
 
  // --- 3. AUTO-ADVANCE & STATUS CHECK ---
+// --- 3. AUTO-ADVANCE & STATUS CHECK ---
     function checkMatchStatus() {
-        // If the match is already over, stop knocking on the server's door!
         if (isMatchOfficiallyOver) return; 
 
         const cacheBuster = new Date().getTime();
         fetch(`/match/{{ match.id }}/check-status/?t=${cacheBuster}`, { cache: "no-store" })
             .then(response => response.json())
             .then(data => {
-                // 🚨 DEBUGGER: This lets you see the heartbeat in your browser console!
-                console.log("Server Heartbeat:", data); 
-
-                // 1. Did the Match officially end?
-                // 2. Did the round advance?
-                if (data.current_round && parseInt(data.current_round) > currentViewedRound) {
-                    document.getElementById('new-round-num').innerText = data.current_round;
-                    document.getElementById('round-lock-overlay').style.display = "flex";
-
+                
+                // 1. Did the Match officially end? (Forgiving check)
+                if (data.is_completed === true || data.is_completed === "True" || data.status === 'completed') {
+                    isMatchOfficiallyOver = true; 
+                    
+                    // 🚨 THE FIX: Give the VIP Pass to the End Match redirect too!
+                    isAutoRefreshing = true; 
+                    
+                    // Safely drop the overlay
+                    const roundNumObj = document.getElementById('new-round-num');
+                    if(roundNumObj) roundNumObj.innerText = "OVER";
+                    
+                    const overlayObj = document.getElementById('round-lock-overlay');
+                    if(overlayObj) overlayObj.style.display = "flex";
+                    
+                    // Redirect back to fixtures after 1.5 seconds
                     setTimeout(() => {
-                        isAutoRefreshing = true; // 🚨 THE FIX: Use the VIP pass!
-                        window.location.reload();
-                    }, 2500);
+                        window.location.href = "{% url 'scorer-dashboard' %}";
+                    }, 1500);
+                    return;
                 }
 
                 // 2. Did the round advance?
                 if (data.current_round && parseInt(data.current_round) > currentViewedRound) {
-                    document.getElementById('new-round-num').innerText = data.current_round;
-                    document.getElementById('round-lock-overlay').style.display = "flex";
+                    
+                    const roundNumObj = document.getElementById('new-round-num');
+                    if(roundNumObj) roundNumObj.innerText = data.current_round;
+                    
+                    const overlayObj = document.getElementById('round-lock-overlay');
+                    if(overlayObj) overlayObj.style.display = "flex";
 
                     setTimeout(() => {
+                        isAutoRefreshing = true; // VIP Pass for next round
                         window.location.reload();
                     }, 2500);
                 }
             })
-            .catch(err => console.error("Heartbeat skipped:", err));
+            .catch(err => console.log("Heartbeat skipped..."));
     }
     // Check every 3 seconds
     setInterval(checkMatchStatus, 3000);
-
     function updateUI() {
         if (selectedFoulType) {
             document.getElementById('ui-sequence').innerText = 'FOUL';
