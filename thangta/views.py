@@ -717,8 +717,7 @@ def manage_fixtures(request, tournament_id):
         
         if form.is_valid():
             data = form.cleaned_data
-            prefilled_ring = data['ring_number']
-            
+            prefilled_ring = request.session.get('selected_ring', 1)
             # 1. Check if ANY matches already exist for this exact category
             existing_matches = Match.objects.filter(
                 tournament=tournament,
@@ -759,11 +758,12 @@ def manage_fixtures(request, tournament_id):
     else:
         form = FixtureGenerationForm()
     
-
+    is_filtered = bool(request.GET.get('event_type') or request.GET.get('gender'))
     return render(request, 'manage_fixtures.html', {
         'tournament': tournament,
         'form': form,
         'prefilled_ring': prefilled_ring,
+        'is_filtered': is_filtered,
     })
     
 # thangta/views.py
@@ -1245,32 +1245,58 @@ def advance_sub_round(request, match_id):
 from django.shortcuts import render, get_object_or_404
 from .models import Match, Tournament
 
-# 1. THE MASTER LIST VIEW
 def global_fixtures(request):
-    matches = Match.objects.all()
-    
-    # Apply Filters
-    if request.GET.get('tournament'):
-        matches = matches.filter(tournament_id=request.GET.get('tournament'))
-    if request.GET.get('event_type'):
-        matches = matches.filter(event_type=request.GET.get('event_type'))
-    if request.GET.get('gender'):
-        matches = matches.filter(gender=request.GET.get('gender'))
-    if request.GET.get('weight_category'):
-        matches = matches.filter(weight_category=request.GET.get('weight_category'))
-    if request.GET.get('age_category'):
-        matches = matches.filter(age_category=request.GET.get('age_category'))
-    if request.GET.get('ring_number'):
-        matches = matches.filter(ring_number=request.GET.get('ring_number'))
+    # 1. Check if ANY filter was actually selected by the user
+    is_filtered = any([
+        request.GET.get('tournament'),
+        request.GET.get('event_type'),
+        request.GET.get('gender'),
+        request.GET.get('weight_category'),
+        request.GET.get('age_category'),
+        request.GET.get('ring_number')
+    ])
 
-    matches = matches.order_by('round_number', 'match_sequence')
+    # 2. Only run the heavy database search if filters exist!
+    if is_filtered:
+        matches = Match.objects.all()
+        
+        # Apply Filters
+        if request.GET.get('tournament'):
+            matches = matches.filter(tournament_id=request.GET.get('tournament'))
+        if request.GET.get('event_type'):
+            matches = matches.filter(event_type=request.GET.get('event_type'))
+        if request.GET.get('gender'):
+            matches = matches.filter(gender=request.GET.get('gender'))
+        if request.GET.get('weight_category'):
+            matches = matches.filter(weight_category=request.GET.get('weight_category'))
+        if request.GET.get('age_category'):
+            matches = matches.filter(age_category=request.GET.get('age_category'))
+        if request.GET.get('ring_number'):
+            matches = matches.filter(ring_number=request.GET.get('ring_number'))
+
+        matches = matches.order_by('round_number', 'match_sequence')
+    else:
+        # If no filters, send an empty list (saves server memory!)
+        matches = Match.objects.none()
+
     tournaments = Tournament.objects.all()
+
+    # Pass the current filters so the dropdowns "remember" what was selected
+    current_filters = {
+        'event_type': request.GET.get('event_type', ''),
+        'gender': request.GET.get('gender', ''),
+        'age_category': request.GET.get('age_category', ''),
+        'weight_category': request.GET.get('weight_category', '')
+    }
 
     return render(request, 'global_fixtures.html', {
         'matches': matches,
         'tournaments': tournaments,
+        'is_filtered': is_filtered,  # 🚨 THE NEW VARIABLE
+        'current_filters': current_filters,
     })
-
+    
+    
 from django.shortcuts import render, get_object_or_404, redirect
 from .models import Match, Tournament
 
@@ -1286,37 +1312,61 @@ def select_ring(request, tournament_id):
         
     return render(request, 'select_ring.html', {'tournament': tournament})
 
-# 2. UPDATED: The Tournament Fixtures Page
+from django.shortcuts import get_object_or_404, redirect
+
 def tournament_matches(request, tournament_id):
     tournament = get_object_or_404(Tournament, id=tournament_id)
-    matches = Match.objects.filter(tournament=tournament)
     
-    # Check if they have a ring in their session. If not, bounce them to the selection page!
+    # 1. Check if they have a ring in their session. If not, bounce them!
     session_ring = request.session.get('selected_ring')
     if not session_ring:
         return redirect('select-ring', tournament_id=tournament.id)
+
+    # 2. Check if the user has selected their categories yet
+    is_filtered = any([
+        request.GET.get('event_type'),
+        request.GET.get('gender'),
+        request.GET.get('weight_category'),
+        request.GET.get('age_category')
+    ])
+
+    # 3. Only run the heavy database search if filters exist!
+    if is_filtered:
+        # Lock to THIS tournament AND their Session Ring
+        matches = Match.objects.filter(tournament=tournament, ring_number=session_ring)
         
-    # Auto-filter by the session ring
-    matches = matches.filter(ring_number=session_ring)
+        # Apply remaining GET filters
+        if request.GET.get('event_type'):
+            matches = matches.filter(event_type=request.GET.get('event_type'))
+        if request.GET.get('gender'):
+            matches = matches.filter(gender=request.GET.get('gender'))
+        if request.GET.get('weight_category'):
+            matches = matches.filter(weight_category=request.GET.get('weight_category'))   
+        if request.GET.get('age_category'):
+            matches = matches.filter(age_category=request.GET.get('age_category'))
 
-    # Apply remaining GET filters (Notice Ring is removed!)
-    if request.GET.get('event_type'):
-        matches = matches.filter(event_type=request.GET.get('event_type'))
-    if request.GET.get('gender'):
-        matches = matches.filter(gender=request.GET.get('gender'))
-    if request.GET.get('weight_category'):
-        matches = matches.filter(weight_category=request.GET.get     ('weight_category'))   
-    if request.GET.get('age_category'):
-        matches = matches.filter(age_category=request.GET.get('age_category'))
+        matches = matches.order_by('round_number', 'match_sequence')
+    else:
+        # If no filters, send an empty list to trigger the HTML placeholder
+        matches = Match.objects.none()
 
-    matches = matches.order_by('round_number', 'match_sequence')
+    # Pass the current filters so the dropdowns "remember" what was selected
+    current_filters = {
+        'event_type': request.GET.get('event_type', ''),
+        'gender': request.GET.get('gender', ''),
+        'age_category': request.GET.get('age_category', ''),
+        'weight_category': request.GET.get('weight_category', '')
+    }
 
     return render(request, 'tournament_matches.html', {
         'tournament': tournament,
         'matches': matches,
-        'current_filters': request.GET,
-        'session_ring': session_ring, # Pass the ring to the template so we can display it
+        'current_filters': current_filters,
+        'session_ring': session_ring,
+        'is_filtered': is_filtered,  # 🚨 Critical for the HTML template!
     })
+
+
 def match_summary(request, match_id):
     match = get_object_or_404(Match, id=match_id)
     
