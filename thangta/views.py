@@ -1088,6 +1088,30 @@ def fetch_score_history(request, match_id):
     
     return response
 
+
+from django.http import JsonResponse
+
+@scorer_required
+def fetch_my_score_receipts(request, match_id):
+    """Returns the logged-in scorer's history for the visual table."""
+    scores = Score.objects.filter(
+        match_id=match_id, 
+        scorer=request.user
+    ).order_by('-round_num', '-sub_round', '-timestamp')
+    
+    history_data = []
+    for s in scores:
+        history_data.append({
+            'round_num': s.round_num,
+            'sub_round': s.sub_round,
+            'points': s.points,
+            'is_foul': s.is_foul,
+            'foul_reason': s.foul_reason if s.is_foul else "",
+        })
+        
+    return JsonResponse({'status': 'success', 'history': history_data})
+
+
 @scorer_required
 def fetch_foul_history(request, match_id):
     """AJAX endpoint to return the foul history table snippet."""

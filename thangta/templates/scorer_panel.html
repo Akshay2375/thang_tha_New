@@ -169,9 +169,29 @@
                     ✓ Submit Scores
                 </button>
             {% endif %}
+            
         </div>
     </div>
-
+<div class="history-box mt-4 bg-white rounded-3 p-3 shadow-sm border border-secondary border-opacity-25">
+    <h6 class="text-center text-muted fw-bold mb-3 border-bottom pb-2">
+        <img src="https://img.icons8.com/color/48/time-machine.png" alt="history" style="width: 20px; margin-top: -3px;"/> 
+        My Scoring History
+    </h6>
+    <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+        <table class="table table-sm table-hover text-center align-middle" style="font-size: 0.9rem;">
+            <thead class="table-light sticky-top">
+                <tr>
+                    <th class="text-muted">Round</th>
+                    <th class="text-muted">Sub</th>
+                    <th class="text-muted">My Input</th>
+                </tr>
+            </thead>
+            <tbody id="score-history-body">
+                <tr><td colspan="3" class="text-muted small py-3">Loading history...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
    
 
 </div>
@@ -378,6 +398,47 @@
     }
  
     updateUI();
+
+
+// --- 7. SCORE HISTORY ENGINE ---
+    function fetchMyScoreHistory() {
+        console.log("Attempting to fetch score history..."); // 🚨 Debugging line!
+        
+        // 🚨 THE FIX: Force the browser to skip the cache!
+        const cacheBuster = new Date().getTime(); 
+        const url = "{% url 'fetch-my-score-receipts' match.id %}?t=" + cacheBuster;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                console.log("History data received:", data); // 🚨 Debugging line!
+                const tbody = document.getElementById('score-history-body');
+                tbody.innerHTML = ""; 
+                
+                if (data.history && data.history.length > 0) {
+                    data.history.forEach(item => {
+                        let pointsBadge = item.is_foul 
+                            ? `<span class="badge bg-danger py-1 px-2">FOUL (${item.foul_reason})</span>` 
+                            : `<span class="badge bg-success py-1 px-3 fs-6">+${item.points}</span>`;
+                        
+                        tbody.innerHTML += `
+                            <tr>
+                                <td class="fw-bold text-dark">R${item.round_num}</td>
+                                <td class="text-secondary fw-bold">${item.sub_round}</td>
+                                <td>${pointsBadge}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="3" class="text-muted small py-3 fst-italic">No scores submitted yet.</td></tr>`;
+                }
+            })
+            .catch(err => console.error("Could not fetch history:", err));
+    }
+
+    // Call it immediately when the page loads!
+    fetchMyScoreHistory();
+    
 </script>
 
 </body>

@@ -59,6 +59,7 @@ urlpatterns = [
     
     # AJAX History endpoints
     path('scorer/match/<int:match_id>/score-history/', fetch_score_history, name='fetch-score-history'),
+    path('scorer/match/<int:match_id>/score-receipts/', fetch_my_score_receipts, name='fetch-my-score-receipts'),
     path('scorer/match/<int:match_id>/foul-history/', fetch_foul_history, name='fetch-foul-history'),
     
     path('match/<int:match_id>/summary/', match_summary, name='match-summary'),
