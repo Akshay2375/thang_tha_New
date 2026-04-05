@@ -39,7 +39,7 @@ def hydrate_match_from_db(match_id, match_state):
         
         actual_score = 0 if score.is_foul else score.points
         actual_foul = score.points if score.is_foul else 0
-       # THE NEW WAY
+       
         scorer_name = score.scorer.get_full_name() or score.scorer.username if score.scorer else f"Scorer {score.scorer_id}"
         corner_state['scorers'][score.scorer_id] = {
             'name': scorer_name,
@@ -76,18 +76,26 @@ def get_or_create_match_state(match_id):
         
     return active_matches[str_id]
 
+
+
+ 
+
 def get_or_create_subround(match_state, round_num, subround):
-    # 🚨 NEW: Create the Round folder if it doesn't exist yet!
-    if round_num not in match_state['rounds']:
-        match_state['rounds'][round_num] = {
+    # 🚨 THE FIX: Force both of these to strings immediately to prevent JSON overwrite!
+    r_str = str(round_num)
+    sr_str = str(subround)
+    
+    # Create the Round folder if it doesn't exist yet!
+    if r_str not in match_state['rounds']:
+        match_state['rounds'][r_str] = {
             'subrounds': {}
         }
         
-    round_state = match_state['rounds'][round_num]
+    round_state = match_state['rounds'][r_str]
     
     # Now it is safe to check for the subround
-    if subround not in round_state['subrounds']:
-        round_state['subrounds'][subround] = {
+    if sr_str not in round_state['subrounds']:
+        round_state['subrounds'][sr_str] = {
             'red': {
                 'scorers': {}, 
                 'status': 'PENDING',
@@ -101,16 +109,19 @@ def get_or_create_subround(match_state, round_num, subround):
                 'final_foul': 0
             }
         }
-    return round_state['subrounds'][subround]
-
-
+    return round_state['subrounds'][sr_str]
 
 
 def submit_scorer_data(match_id, round_num, subround, corner, scorer_id, scorer_name, score, foul=0):
     """Called when a scorer submits their score."""
+    
+    # 🚨 THE FIX: Also force them to strings here just to be safe!
+    r_str = str(round_num)
+    sr_str = str(subround)
+    
     with state_lock:
         match_state = get_or_create_match_state(match_id)
-        sr_state = get_or_create_subround(match_state, round_num, subround)
+        sr_state = get_or_create_subround(match_state, r_str, sr_str)
         corner_state = sr_state[corner]
 
         if corner_state['status'] == 'COMPLETE':
@@ -143,6 +154,7 @@ def submit_scorer_data(match_id, round_num, subround, corner, scorer_id, scorer_
     
     return newly_completed, match_state
 
+
 def flag_score(match_id, round_num, subround, corner, scorer_id):
     """Called by the judge to flag a specific scorer's input."""
     success = False
@@ -164,9 +176,8 @@ def flag_score(match_id, round_num, subround, corner, scorer_id):
         
     return False, None
     
-# ==========================================
-# SSE BROADCASTER LOGIC
-# ==========================================
+ 
+ 
 def register_client(match_id):
     """Creates a unique listening queue for a new Judge connection."""
     with state_lock:

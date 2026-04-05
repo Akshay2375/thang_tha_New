@@ -190,46 +190,52 @@
     let isMatchOfficiallyOver = false;
 
     // --- 2. THE NAVIGATION LOCKDOWN ---
+   
+    let isAutoRefreshing = false; 
+
     history.pushState(null, null, location.href);
     window.onpopstate = function () {
-        if (!isMatchOfficiallyOver) {
+        if (!isMatchOfficiallyOver && !isAutoRefreshing) {
             history.pushState(null, null, location.href);
             flashToast("danger", "Navigation disabled! Finish the match first.", "danger");
         }
     };
 
     window.addEventListener('beforeunload', function (e) {
-        if (!isMatchOfficiallyOver) {
+        // Only block them if the match is active AND we aren't trying to auto-refresh
+        if (!isMatchOfficiallyOver && !isAutoRefreshing) {
             e.preventDefault();
             e.returnValue = 'Match in progress! Leaving will disrupt scoring.';
         }
     });
-
-    // --- 3. AUTO-ADVANCE & STATUS CHECK ---
-
     
+ 
+
+ // --- 3. AUTO-ADVANCE & STATUS CHECK ---
     function checkMatchStatus() {
-         const cacheBuster = new Date().getTime();
-        
-        fetch(`/match/{{ match.id }}/status/?t=${cacheBuster}`, { cache: "no-store" }) 
+        // If the match is already over, stop knocking on the server's door!
+        if (isMatchOfficiallyOver) return; 
+
+        const cacheBuster = new Date().getTime();
+        fetch(`/match/{{ match.id }}/check-status/?t=${cacheBuster}`, { cache: "no-store" })
             .then(response => response.json())
             .then(data => {
-                
-               
-                
-                if (data.is_completed === true || data.status === 'completed') {
-                    isMatchOfficiallyOver = true; 
-                    document.getElementById('new-round-num').innerText = "OVER";
-                    document.getElementById('new-round-num').parentElement.innerHTML = "🏁 MATCH COMPLETE 🏁";
+                // 🚨 DEBUGGER: This lets you see the heartbeat in your browser console!
+                console.log("Server Heartbeat:", data); 
+
+                // 1. Did the Match officially end?
+                // 2. Did the round advance?
+                if (data.current_round && parseInt(data.current_round) > currentViewedRound) {
+                    document.getElementById('new-round-num').innerText = data.current_round;
                     document.getElementById('round-lock-overlay').style.display = "flex";
-                    
+
                     setTimeout(() => {
-                        window.location.href = "{% url 'scorer-dashboard' %}";
-                    }, 2000);
-                    return;
+                        isAutoRefreshing = true; // 🚨 THE FIX: Use the VIP pass!
+                        window.location.reload();
+                    }, 2500);
                 }
 
-                
+                // 2. Did the round advance?
                 if (data.current_round && parseInt(data.current_round) > currentViewedRound) {
                     document.getElementById('new-round-num').innerText = data.current_round;
                     document.getElementById('round-lock-overlay').style.display = "flex";
@@ -239,14 +245,10 @@
                     }, 2500);
                 }
             })
-            .catch(err => console.log("Status check failed", err));
+            .catch(err => console.error("Heartbeat skipped:", err));
     }
-
-
- 
+    // Check every 3 seconds
     setInterval(checkMatchStatus, 3000);
-     
-
 
     function updateUI() {
         if (selectedFoulType) {
@@ -265,7 +267,7 @@
         document.getElementById('ui-sequence').className = sequenceStr === "" ? "" : 'text-danger fw-bold';
         document.getElementById('ui-total').innerText = total;
 
-        // Lock at 3 entries
+         
         let totalEntries = pendingScores.length;
         document.getElementById('btn-point-1').disabled = (totalEntries >= 3);
         document.getElementById('btn-point-2').disabled = (totalEntries >= 3);
@@ -303,7 +305,7 @@
         selectedFoulType = null;
     }
 
-    // --- 5. SCORE SUBMISSION LOGIC ---
+ 
     function submitScores(participantId) {
         if (event) { event.preventDefault(); }
 
@@ -333,7 +335,7 @@
                     srDisplay.innerText = currentActiveSubRound;
                 }
                 
-                // Wipe the board clean
+               
                 pendingScores = [];
                 clearFoulSelection(); 
                 updateUI();
@@ -354,8 +356,7 @@
             flashToast("danger", "Network error. Try again.", "danger");
         });
     }
-
-    // --- 6. TOAST NOTIFICATIONS ---
+ 
     function flashToast(type, message, bsClass) {
         const toast = document.getElementById('feedback-toast');
         if(!toast) return;
@@ -364,8 +365,7 @@
         toast.style.display = 'block';
         setTimeout(() => toast.style.display = 'none', 2000);
     }
-
-    // Initialize UI on load
+ 
     updateUI();
 </script>
 

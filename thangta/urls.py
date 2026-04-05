@@ -70,8 +70,9 @@ path('coach/logout/', district_logout_coach, name='district-logout-coach'),
 path('coach/participants/<int:participant_id>/edit/', edit_participant_coach, name='edit-participant-coach'),
 path('coach/participants/<int:participant_id>/delete/', delete_participant_coach, name='delete-participant-coach'),
 
-path('match/<int:match_id>/status/', check_match_status, name='check-match-status'),
-
+ 
+ 
+path('match/<int:match_id>/check-status/', check_match_status, name='check-match-status'),
 
 
 

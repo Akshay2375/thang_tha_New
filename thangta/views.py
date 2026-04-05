@@ -670,14 +670,17 @@ def match_live_data(request, match_id):
         'foul_html': foul_html,
     })
 
+
 @judge_required
 @require_POST
 def advance_match_round(request, match_id, round_num):
-    """Updates the match to Round 2 or Tie Breaker."""
+
     match = get_object_or_404(Match, id=match_id)
     match.current_round = round_num
+    match.current_sub_round = 1 
     match.save()
     return redirect('judge-live-match', match_id=match.id)
+ 
 
 
 from .permissions import scorer_required
@@ -1097,6 +1100,7 @@ def fetch_foul_history(request, match_id):
     fouls = Score.objects.filter(match=match, participant=participant, is_foul=True).order_by('-timestamp')
     
     return render(request, 'scorer_foul_table.html', {'fouls': fouls})
+
 
 @judge_required
 def update_match_winner(request, match_id):
@@ -1646,6 +1650,7 @@ def submit_score(request, match_id):
 
     # We return the subround_completed flag so the Scorer's phone knows if it advanced
     return JsonResponse({'status': 'success', 'subround_completed': newly_completed})
+
 
 
 @judge_required
