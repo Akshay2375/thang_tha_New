@@ -346,6 +346,8 @@ def auto_generate_next_round(request, match_id):
             
     return redirect('tournament-matches', tournament_id=reference_match.tournament.id)
 
+
+
 # ==========================================
 # 6. JUDGE MAT CONTROL
 # ==========================================
@@ -1701,32 +1703,29 @@ def submit_score(request, match_id):
             total_red += r_totals['red']
             total_blue += r_totals['blue']
 
-        # Save Grand Totals
-        # match.score_red = total_red    
-        # match.score_blue = total_blue  
+        # 🚨 UNCOMMENTED: Save Grand Totals
+        match.score_red = total_red    
+        match.score_blue = total_blue  
         
-        # Save Round 1
-        # if hasattr(match, 'round_1_red'): 
-        #     match.round_1_red = round_totals[1]['red']
-        #     match.round_1_blue = round_totals[1]['blue']
+        # 🚨 UNCOMMENTED: Save Round 1
+        if hasattr(match, 'round_1_red'): 
+            match.round_1_red = round_totals[1]['red']
+            match.round_1_blue = round_totals[1]['blue']
             
-        # # Save Round 2
-        # if hasattr(match, 'round_2_red'): 
-        #     match.round_2_red = round_totals[2]['red']
-        #     match.round_2_blue = round_totals[2]['blue']
+        # 🚨 UNCOMMENTED: Save Round 2
+        if hasattr(match, 'round_2_red'): 
+            match.round_2_red = round_totals[2]['red']
+            match.round_2_blue = round_totals[2]['blue']
             
-        # # Save Round 3 (Tie Breaker)
-        # if hasattr(match, 'round_3_red'): 
-        #     match.round_3_red = round_totals[3]['red']
-        #     match.round_3_blue = round_totals[3]['blue']
+        # 🚨 UNCOMMENTED: Save Round 3 (Tie Breaker)
+        if hasattr(match, 'round_3_red'): 
+            match.round_3_red = round_totals[3]['red']
+            match.round_3_blue = round_totals[3]['blue']
             
-        # match.save() # THIS LOCKS IT IN!
+        match.save() # THIS LOCKS IT IN!
 
     # We return the subround_completed flag so the Scorer's phone knows if it advanced
     return JsonResponse({'status': 'success', 'subround_completed': newly_completed})
-
-
-
 @judge_required
 @require_POST
 def flag_live_score(request, match_id):

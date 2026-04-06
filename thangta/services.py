@@ -71,11 +71,9 @@ def generate_round_one_fixtures(tournament, event_type, age_category, weight_cat
     return True, "Round 1 fixtures generated successfully."
 
 
-from .models import Match  # Make sure to import your Match model!
-
-# thangta/services.py
+ 
+ 
 from .models import Match
-
 def generate_next_round(tournament, event_type, age_category, weight_category, gender, current_round, ring_number):
     """Generates the next round, including Gold and Bronze medal matches."""
     
@@ -86,6 +84,13 @@ def generate_next_round(tournament, event_type, age_category, weight_category, g
     
     if current_matches.filter(is_completed=False).exists():
         return False, f"Cannot generate next round. Round {current_round} still has unfinished matches!"
+
+    # ==========================================
+    # 🚨 THE FIX: THE TOURNAMENT LOCKDOWN
+    # Stop the script if we are already in the Medal Phase!
+    # ==========================================
+    if current_matches.filter(match_sequence__in=[1001, 1002]).exists():
+        return False, "🏆 Category is complete! The Gold and Bronze medal matches have already been generated."
 
     next_round_num = current_round + 1
 
@@ -155,4 +160,3 @@ def generate_next_round(tournament, event_type, age_category, weight_category, g
         return False, "Category is complete! The final match has already been played."
 
     return False, "Failed to generate next round."
-

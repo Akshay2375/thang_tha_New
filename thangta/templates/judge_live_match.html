@@ -120,7 +120,40 @@
     </form>
 </div>
 </div>
+{% if match.current_round > 1 %}
+<div class="card shadow-sm border-0 mb-4 rounded-3">
+    <div class="card-header bg-dark text-white fw-bold text-center" style="letter-spacing: 1px;">
+        <img src="https://img.icons8.com/color/48/scoreboard.png" alt="score" style="width: 24px; margin-top: -4px; margin-right: 8px;"/>
+        PREVIOUS ROUND SCORES
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-bordered table-striped text-center align-middle mb-0" style="table-layout: fixed;">
+            <thead class="table-light">
+                <tr>
+                    <th class="text-muted text-uppercase small">Round</th>
+                    <th class="text-danger fw-bold">{{ match.participant_red.name }} (RED)</th>
+                    <th class="text-primary fw-bold">{{ match.participant_blue.name }} (BLUE)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="fw-bold text-secondary">Round 1</td>
+                    <td class="fs-5 fw-bold text-danger">{{ match.round_1_red|default:"0" }}</td>
+                    <td class="fs-5 fw-bold text-primary">{{ match.round_1_blue|default:"0" }}</td>
+                </tr>
 
+                {% if match.current_round > 2 %}
+                <tr>
+                    <td class="fw-bold text-secondary">Round 2</td>
+                    <td class="fs-5 fw-bold text-danger">{{ match.round_2_red|default:"0" }}</td>
+                    <td class="fs-5 fw-bold text-primary">{{ match.round_2_blue|default:"0" }}</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 <script>
     const matchId = "{{ match.id }}";
     const currentRound = parseInt("{{ match.current_round|default:'1' }}");
