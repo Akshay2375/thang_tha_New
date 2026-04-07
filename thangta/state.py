@@ -14,7 +14,6 @@ state_lock = threading.Lock()
 
 # ==========================================
 # DATABASE HYDRATION
-# ==========================================
 def hydrate_match_from_db(match_id, match_state):
     """Pulls all historical scores from the database and rebuilds the RAM matrix."""
     from .models import Score, Match 
@@ -37,17 +36,21 @@ def hydrate_match_from_db(match_id, match_state):
         sr_state = get_or_create_subround(match_state, r_num, sr_num)
         corner_state = sr_state[corner]
         
-        actual_score = 0 if score.is_foul else score.points
-        actual_foul = score.points if score.is_foul else 0
+        # 🚨 THE FIX: Treat them completely independently during hydration!
+        actual_score = score.points
+        actual_foul = -3 if score.is_foul else 0
        
         scorer_name = score.scorer.get_full_name() or score.scorer.username if score.scorer else f"Scorer {score.scorer_id}"
+        
+        # Save it to the RAM dictionary ONCE
         corner_state['scorers'][score.scorer_id] = {
             'name': scorer_name,
             'score': actual_score,
             'foul': actual_foul,
-            'flagged': score.is_flagged
+            'flagged': getattr(score, 'is_flagged', False) # Safely gets flagged status
         }
         
+        # Check if the subround is complete and do the math
         submissions = list(corner_state['scorers'].values())
         if len(submissions) == 3:
             corner_state['status'] = 'COMPLETE'
@@ -63,6 +66,7 @@ def hydrate_match_from_db(match_id, match_state):
 # ==========================================
 # RAM STATE MANAGEMENT
 # ==========================================
+
 def get_or_create_match_state(match_id):
     """Gets the RAM state. If it's empty, it builds it and hydrates it!"""
     str_id = str(match_id)
@@ -76,9 +80,6 @@ def get_or_create_match_state(match_id):
         
     return active_matches[str_id]
 
-
-
- 
 
 def get_or_create_subround(match_state, round_num, subround):
     # 🚨 THE FIX: Force both of these to strings immediately to prevent JSON overwrite!

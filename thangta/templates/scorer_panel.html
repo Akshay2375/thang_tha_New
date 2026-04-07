@@ -257,7 +257,7 @@
                     
                     // Redirect back to fixtures after 1.5 seconds
                     setTimeout(() => {
-                        window.location.href = "{% url 'scorer-dashboard' %}";
+                        window.location.href = "{% url 'tournamnet-matches'  %}";
                     }, 1500);
                     return;
                 }
@@ -281,24 +281,24 @@
     }
     // Check every 3 seconds
     setInterval(checkMatchStatus, 3000);
-    function updateUI() {
-        if (selectedFoulType) {
-            document.getElementById('ui-sequence').innerText = 'FOUL';
-            document.getElementById('ui-sequence').className = 'text-danger fw-bold';
-            document.getElementById('ui-total').innerText = "-3";
-            document.getElementById('btn-point-1').disabled = false;
-            document.getElementById('btn-point-2').disabled = false;
-            return;
-        }
 
+function updateUI() {
+        // Calculate points
         let total = pendingScores.reduce((a, b) => a + b, 0);
         let sequenceStr = pendingScores.join(' + ');
 
-        document.getElementById('ui-sequence').innerText = sequenceStr === "" ? "—" : sequenceStr;
-        document.getElementById('ui-sequence').className = sequenceStr === "" ? "" : 'text-danger fw-bold';
+        // 🚨 THE FIX: Let points and fouls share the UI Sequence text!
+        let displaySequence = sequenceStr;
+        if (selectedFoulType) {
+            displaySequence = displaySequence ? displaySequence + ' & FOUL' : 'FOUL';
+        }
+
+        document.getElementById('ui-sequence').innerText = displaySequence === "" ? "—" : displaySequence;
+        document.getElementById('ui-sequence').className = displaySequence === "" ? "" : 'text-danger fw-bold';
+        
+        // Display just the points in the total box (the red button shows the foul visually)
         document.getElementById('ui-total').innerText = total;
 
-         
         let totalEntries = pendingScores.length;
         document.getElementById('btn-point-1').disabled = (totalEntries >= 3);
         document.getElementById('btn-point-2').disabled = (totalEntries >= 3);
@@ -309,7 +309,7 @@
             flashToast("warning", "Max 3 entries allowed!", "warning");
             return; 
         }
-        clearFoulSelection();
+        // 🚨 THE FIX: We removed clearFoulSelection() so it doesn't delete fouls!
         pendingScores.push(points);
         updateUI();
     }
@@ -321,12 +321,20 @@
     }
 
     function toggleFoul(btn, foulType) {
-        pendingScores = []; 
+        // 🚨 THE FIX: We removed pendingScores = [] so it doesn't delete points!
         const foulButtons = document.querySelectorAll('.foul-type-btn');
-        foulButtons.forEach(b => b.classList.remove('active'));
-
-        btn.classList.add('active');
-        selectedFoulType = foulType;
+        
+        // If they click the same foul again, turn it off (deselect)
+        if (selectedFoulType === foulType) {
+            btn.classList.remove('active');
+            selectedFoulType = null;
+        } else {
+            // Otherwise, turn off others and turn this one on
+            foulButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            selectedFoulType = foulType;
+        }
+        
         updateUI();
     }
 
@@ -336,7 +344,8 @@
         selectedFoulType = null;
     }
 
- 
+   
+   
     function submitScores(participantId) {
         if (event) { event.preventDefault(); }
 
@@ -366,7 +375,6 @@
                     srDisplay.innerText = currentActiveSubRound;
                 }
                 
-               
                 pendingScores = [];
                 clearFoulSelection(); 
                 updateUI();
@@ -374,8 +382,13 @@
                 submitBtn.disabled = false;
                 submitBtn.innerText = "✓ Submit Scores";
                 flashToast("success", "Score Sent! Sub-round " + currentActiveSubRound, "success");
+                
+                // 🚨 THE FIX: Tell the history table to update right now!
+                fetchMyScoreHistory(); 
+                
             } else {
                 flashToast("danger", data.message || "Submission failed.", "danger");
+                // ... rest of your code ...
                 submitBtn.disabled = false;
                 submitBtn.innerText = "✓ Submit Scores";
             }
@@ -402,30 +415,41 @@
 
 // --- 7. SCORE HISTORY ENGINE ---
     function fetchMyScoreHistory() {
-        console.log("Attempting to fetch score history..."); // 🚨 Debugging line!
-        
-        // 🚨 THE FIX: Force the browser to skip the cache!
         const cacheBuster = new Date().getTime(); 
         const url = "{% url 'fetch-my-score-receipts' match.id %}?t=" + cacheBuster;
 
         fetch(url)
             .then(response => response.json())
             .then(data => {
-                console.log("History data received:", data); // 🚨 Debugging line!
                 const tbody = document.getElementById('score-history-body');
                 tbody.innerHTML = ""; 
                 
                 if (data.history && data.history.length > 0) {
                     data.history.forEach(item => {
-                        let pointsBadge = item.is_foul 
-                            ? `<span class="badge bg-danger py-1 px-2">FOUL (${item.foul_reason})</span>` 
-                            : `<span class="badge bg-success py-1 px-3 fs-6">+${item.points}</span>`;
+                        
+                        // 🚨 THE FIX: Build the badges independently!
+                        let badges = "";
+                        
+                        // 1. Did they score points?
+                        if (item.points > 0) {
+                            badges += `<span class="badge bg-success py-1 px-3 fs-6 me-1">+${item.points}</span>`;
+                        }
+                        
+                        // 2. Did they ALSO commit a foul?
+                        if (item.is_foul) {
+                            badges += `<span class="badge bg-danger py-1 px-2">FOUL (${item.foul_reason})</span>`;
+                        }
+                        
+                        // 3. Did they submit a blank zero?
+                        if (item.points === 0 && !item.is_foul) {
+                            badges = `<span class="badge bg-secondary py-1 px-3">0</span>`;
+                        }
                         
                         tbody.innerHTML += `
                             <tr>
                                 <td class="fw-bold text-dark">R${item.round_num}</td>
                                 <td class="text-secondary fw-bold">${item.sub_round}</td>
-                                <td>${pointsBadge}</td>
+                                <td>${badges}</td>
                             </tr>
                         `;
                     });

@@ -265,3 +265,13 @@ class District(models.Model):
 
     def __str__(self):
         return self.name
+    
+
+ 
+from django.conf import settings
+class ScorerAssignment(models.Model):
+    match = models.ForeignKey(Match, on_delete=models.CASCADE)
+    scorer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    corner = models.CharField(max_length=10) 
+    class Meta:
+        unique_together = ('match', 'scorer')

@@ -839,55 +839,62 @@ from django.urls import reverse
 from django.contrib import messages
 from .models import Match, Score 
 
+# Make sure to import ScorerAssignment at the top of your file!
+from .models import ScorerAssignment 
+
+from django.urls import reverse
+ 
+
 @scorer_required
 def scorer_panel(request, match_id):
-    """The scoring panel that securely locks the scorer into their chosen corner."""
     match = get_object_or_404(Match, id=match_id)
-    corner = request.GET.get('corner', '').lower()
     
-    # 1. Check if match is live
+    # 1. Check if match is live (Do this FIRST so they don't get locked into a dead match)
     if match.is_completed or not match.is_active:
         messages.warning(request, "This match is not currently active.")
         return redirect('scorer-dashboard')
 
-    session_key = f"locked_corner_match_{match.id}"
-    
     # ==========================================
-    # 🚨 THE DEVELOPER RESET HACK
+    # 🚨 THE DEVELOPER RESET HACK (UPDATED)
     # ==========================================
     if request.GET.get('reset') == 'true':
-        if session_key in request.session:
-            del request.session[session_key]
-            request.session.modified = True
+        # 🚨 THE FIX: We must delete the Database record now, not the session!
+        ScorerAssignment.objects.filter(match=match, scorer=request.user).delete()
         messages.success(request, "Security lock removed! You can now pick a new corner.")
         return redirect('scorer-select-corner', match_id=match.id)
 
     # ==========================================
-    # 🚨 THE URL TAMPER TRAP & SECURITY LOCK
+    # 🚨 THE DATABASE LOCK-IN LOGIC
     # ==========================================
-    locked_corner = request.session.get(session_key)
+    assignment = ScorerAssignment.objects.filter(match=match, scorer=request.user).first()
     
-    if locked_corner:
-        if corner != locked_corner:
-            # They tried to switch corners mid-match! Trap them and send them back.
-            messages.warning(request, f"Access Denied: You are locked to the {locked_corner.upper()} corner.")
+    if assignment:
+        # They are already locked in! 
+        corner = assignment.corner
+        
+        # URL Tamper Trap: If they try to change the URL to ?corner=blue but they are Red
+        requested_corner = request.GET.get('corner')
+        if requested_corner and requested_corner != corner:
+            messages.warning(request, f"Access Denied: You are permanently locked to the {corner.upper()} corner.")
             url = reverse('scorer-panel', args=[match.id])
-            return redirect(f"{url}?corner={locked_corner}")
+            return redirect(f"{url}?corner={corner}")
+            
+    else:
+        # First time arriving! Check the URL.
+        corner = request.GET.get('corner')
         
-        # Safe to proceed
-        corner = locked_corner 
-        
-    elif corner in ['red', 'blue']:
-        # First time arriving! Check for BYE match mistake, then lock the door.
-        if corner == 'blue' and not match.participant_blue:
-            messages.error(request, "Invalid corner selected. There is no Blue participant.")
+        if corner in ['red', 'blue']:
+            # Check for the BYE match mistake before locking them in
+            if corner == 'blue' and not match.participant_blue:
+                messages.error(request, "Invalid corner selected. There is no Blue participant.")
+                return redirect('scorer-select-corner', match_id=match.id)
+                
+            # Lock it in the database permanently!
+            ScorerAssignment.objects.create(match=match, scorer=request.user, corner=corner)
+        else:
+            # No valid corner in URL? Kick them to the selection screen.
             return redirect('scorer-select-corner', match_id=match.id)
             
-        request.session[session_key] = corner
-    else:
-        # No corner in URL? Kick them to the selection screen.
-        return redirect('scorer-select-corner', match_id=match.id)
-    
     # ==========================================
     # 🚨 SUB-ROUND MATH
     # ==========================================
@@ -912,9 +919,83 @@ def scorer_panel(request, match_id):
         'total_score': 0,
         'db_score_count': 0, 
     })
+# Make sure ScorerAssignment is imported at the top!
+
+@scorer_required
+def scorer_panel(request, match_id):
+    match = get_object_or_404(Match, id=match_id)
     
+    # 1. Check if match is live (Do this FIRST so they don't get locked into a dead match)
+    if match.is_completed or not match.is_active:
+        messages.warning(request, "This match is not currently active.")
+        return redirect('scorer-dashboard')
+
+    # ==========================================
+    # 🚨 THE DEVELOPER RESET HACK (UPDATED)
+    # ==========================================
+    if request.GET.get('reset') == 'true':
+        # 🚨 THE FIX: We must delete the Database record now, not the session!
+        ScorerAssignment.objects.filter(match=match, scorer=request.user).delete()
+        messages.success(request, "Security lock removed! You can now pick a new corner.")
+        return redirect('scorer-select-corner', match_id=match.id)
+
+    # ==========================================
+    # 🚨 THE DATABASE LOCK-IN LOGIC
+    # ==========================================
+    assignment = ScorerAssignment.objects.filter(match=match, scorer=request.user).first()
     
+    if assignment:
+        # They are already locked in! 
+        corner = assignment.corner
+        
+        # URL Tamper Trap: If they try to change the URL to ?corner=blue but they are Red
+        requested_corner = request.GET.get('corner')
+        if requested_corner and requested_corner != corner:
+            messages.warning(request, f"Access Denied: You are permanently locked to the {corner.upper()} corner.")
+            url = reverse('scorer-panel', args=[match.id])
+            return redirect(f"{url}?corner={corner}")
+            
+    else:
+        # First time arriving! Check the URL.
+        corner = request.GET.get('corner')
+        
+        if corner in ['red', 'blue']:
+            # Check for the BYE match mistake before locking them in
+            if corner == 'blue' and not match.participant_blue:
+                messages.error(request, "Invalid corner selected. There is no Blue participant.")
+                return redirect('scorer-select-corner', match_id=match.id)
+                
+            # Lock it in the database permanently!
+            ScorerAssignment.objects.create(match=match, scorer=request.user, corner=corner)
+        else:
+            # No valid corner in URL? Kick them to the selection screen.
+            return redirect('scorer-select-corner', match_id=match.id)
+            
+    # ==========================================
+    # 🚨 SUB-ROUND MATH
+    # ==========================================
+    participant = match.participant_red if corner == 'red' else match.participant_blue
+    current_round_int = int(match.current_round)
+
+    # The BULLETPROOF Count: Match + Round + Fighter + Specific Judge
+    scorer_score_count = Score.objects.filter(
+        match=match, 
+        round_num=current_round_int, 
+        participant=participant,
+        scorer=request.user 
+    ).count()
     
+    current_sub_round = scorer_score_count + 1
+    
+    return render(request, 'scorer_panel.html', {
+        'match': match,
+        'corner': corner,  # This makes the HTML Red or Blue
+        'current_sub_round': current_sub_round, 
+        'points_string': "",
+        'total_score': 0,
+        'db_score_count': 0, 
+    })
+
 from django.http import HttpResponse
 
 
@@ -1392,7 +1473,7 @@ def tournament_matches(request, tournament_id):
         'is_filtered': is_filtered,  # 🚨 Critical for the HTML template!
     })
 
-
+@admin_required
 def match_summary(request, match_id):
     match = get_object_or_404(Match, id=match_id)
     
@@ -1408,7 +1489,7 @@ from .models import District, Participant # Make sure Participant is imported!
 # --- COACH PORTAL VIEWS ---
 
 def district_login_coach(request):
-    # Bypass if already logged in
+     
     if request.session.get('coach_district'):
         return redirect('manage-participants-coach')
 
@@ -1612,8 +1693,9 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404
-from .models import Match, Score # Ensure Score is imported!
-from . import state
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+ 
 
 @scorer_required  
 @require_POST
@@ -1635,7 +1717,7 @@ def submit_score(request, match_id):
     subround = int(request.POST.get('subround', 1))
     scorer_id = int(request.user.id)
     
-    # 3. Calculate Foul & Score values
+    # 3. Calculate Foul & Score values independently
     is_foul = request.POST.get('is_foul') == 'true'
     foul_val = -3 if is_foul else 0
     
@@ -1651,13 +1733,15 @@ def submit_score(request, match_id):
 
     # ==========================================
     # 🚨 STEP A: THE AUDIT TRAIL LOG
-    # Save the exact receipt to the database for historical records!
     # ==========================================
     Score.objects.create(
         match=match,
         participant=target_participant,
         scorer=request.user,
-        points=foul_val if is_foul else score_val,
+        
+        # Always save the points! Do not overwrite them with the foul!
+        points=score_val, 
+        
         sub_round=subround,
         round_num=round_num,
         is_foul=is_foul,
@@ -1703,29 +1787,28 @@ def submit_score(request, match_id):
             total_red += r_totals['red']
             total_blue += r_totals['blue']
 
-        # 🚨 UNCOMMENTED: Save Grand Totals
-        match.score_red = total_red    
-        match.score_blue = total_blue  
+        # 🚨 THE FIX: Floor the Grand Totals at 0
+        match.score_red = max(0, total_red)    
+        match.score_blue = max(0, total_blue)  
         
-        # 🚨 UNCOMMENTED: Save Round 1
+        # 🚨 THE FIX: Floor the individual rounds at 0 too!
         if hasattr(match, 'round_1_red'): 
-            match.round_1_red = round_totals[1]['red']
-            match.round_1_blue = round_totals[1]['blue']
+            match.round_1_red = max(0, round_totals[1]['red'])
+            match.round_1_blue = max(0, round_totals[1]['blue'])
             
-        # 🚨 UNCOMMENTED: Save Round 2
         if hasattr(match, 'round_2_red'): 
-            match.round_2_red = round_totals[2]['red']
-            match.round_2_blue = round_totals[2]['blue']
+            match.round_2_red = max(0, round_totals[2]['red'])
+            match.round_2_blue = max(0, round_totals[2]['blue'])
             
-        # 🚨 UNCOMMENTED: Save Round 3 (Tie Breaker)
         if hasattr(match, 'round_3_red'): 
-            match.round_3_red = round_totals[3]['red']
-            match.round_3_blue = round_totals[3]['blue']
+            match.round_3_red = max(0, round_totals[3]['red'])
+            match.round_3_blue = max(0, round_totals[3]['blue'])
             
         match.save() # THIS LOCKS IT IN!
 
     # We return the subround_completed flag so the Scorer's phone knows if it advanced
     return JsonResponse({'status': 'success', 'subround_completed': newly_completed})
+
 @judge_required
 @require_POST
 def flag_live_score(request, match_id):

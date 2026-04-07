@@ -251,18 +251,36 @@
                     const scorerData = (srState && srState.scorers) ? srState.scorers[scorerId] : null;
 
                     if (scorerData) {
-                        let displayVal = scorerData.foul < 0 ? `<span class="badge bg-danger">FOUL (${scorerData.foul})</span>` : scorerData.score;
+                        // 🚨 THE FIX: Build the display to show BOTH points and fouls!
+                        let displayVal = "";
+                        
+                        // 1. Show the points (if they scored any)
+                        if (scorerData.score > 0) {
+                            displayVal += `<span class="fw-bold" style="font-size: 1.4rem;">${scorerData.score}</span>`;
+                        }
+                        
+                        // 2. Show the foul (if they committed one)
+                        if (scorerData.foul < 0) {
+                            if (scorerData.score > 0) displayVal += `<br>`; // Add a line break if points are above it
+                            displayVal += `<span class="badge bg-danger shadow-sm">FOUL (${scorerData.foul})</span>`;
+                        }
+                        
+                        // 3. If they sent a pure 0
+                        if (scorerData.score === 0 && scorerData.foul === 0) {
+                            displayVal = `<span class="text-muted fw-bold">0</span>`;
+                        }
+
                         let flagStyle = scorerData.flagged ? "text-decoration-line-through text-danger opacity-50 bg-warning" : "";
                         
                         bodyHtml += `
-                            <td class="fw-bold fs-5 ${flagStyle}" 
-                                style="cursor: pointer;" 
+                            <td class="align-middle ${flagStyle}" 
+                                style="cursor: pointer; min-width: 120px;" 
                                 onclick="flagScore(${i}, '${corner}', ${scorerId})"
                                 title="Click to flag/unflag">
                                 ${displayVal}
                             </td>`;
                     } else {
-                        bodyHtml += `<td class="text-muted opacity-25">⏳</td>`;
+                        bodyHtml += `<td class="text-muted opacity-25 align-middle">⏳</td>`;
                     }
                 }
                 bodyHtml += `</tr>`;
@@ -308,11 +326,14 @@
         }
 
         // Update the Giant Score Boxes with the cumulative match total
+     // Update the Giant Score Boxes with the cumulative match total
         const rScore = document.getElementById('red-score') || document.querySelector('.red-corner .big-score');
-        if (rScore) rScore.innerText = grandTotalRed;
+        // 🚨 THE FIX: Clamp the score to a minimum of 0
+        if (rScore) rScore.innerText = Math.max(0, grandTotalRed); 
         
         const bScore = document.getElementById('blue-score') || document.querySelector('.blue-corner .big-score');
-        if (bScore) bScore.innerText = grandTotalBlue;
+        // 🚨 THE FIX: Clamp the score to a minimum of 0
+        if (bScore) bScore.innerText = Math.max(0, grandTotalBlue);
     }
 </script>
 </body>
