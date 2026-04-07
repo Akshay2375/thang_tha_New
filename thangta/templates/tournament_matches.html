@@ -123,8 +123,7 @@
                         <div class="d-flex flex-column gap-4">
                             {% for match in round.list %}
                                 <div class="card match-card {% if match.is_completed %}opacity-75 clickable-card{% endif %}" 
-                                     style="order: {% if match.is_active and not match.is_completed %}1{% elif match.is_completed %}3{% else %}2{% endif %};"
-                                     {% if match.is_completed %}onclick="window.location.href='{% url 'match-summary' match.id %}'"{% endif %}>
+     {% if match.is_completed %}onclick="window.location.href='{% url 'match-summary' match.id %}'"{% endif %}>
                                     
                                     <div class="card-body text-center p-4 d-flex flex-column h-100">
                                         <p class="text-muted small mb-1">{{ match.full_category_name|default:match.event_type }}</p>
@@ -155,24 +154,25 @@
                                                 <div class="text-primary small mt-2 fw-bold">📊 Click to view scoreboard</div>
                                             
                                            {% elif match.is_active %}
-                                                {% if not user.is_authenticated %}
-                                                <a href="{% url 'public-live-match' match.id %}" class="btn btn-warning text-dark w-100 fw-bold mb-2 shadow-sm" style="border-radius: 8px;">
-                                                    🔴 WATCH LIVE
-                                                </a>
-                                                {% endif %}
+                                               {% if not user.is_authenticated %}
+    <a href="{% url 'public-live-match' match.id %}?{{ request.GET.urlencode }}" class="btn btn-warning text-dark w-100 fw-bold mb-2 shadow-sm" style="border-radius: 8px;">
+        🔴 WATCH LIVE
+    </a>
+{% endif %}
 
-                                                {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
-                                                    <a href="{% url 'judge-live-match' match.id %}" class="btn btn-dark w-100 fw-bold shadow-sm">Enter Judge Panel</a>
-                                                {% elif request.user.role == 'SCORER' %}
-                                                    <a href="{% url 'scorer-select-corner' match.id %}" class="btn btn-primary w-100 fw-bold shadow-sm">📱 Score Match</a>
-                                                {% endif %}
-                                                
-                                            {% else %}
-                                                <span class="badge bg-light text-dark border p-2 mb-2 w-100 d-inline-block">Waiting to Start</span>
-                                                {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
-                                                    <a href="{% url 'start-match' match.id %}" class="btn btn-success w-100 fw-bold shadow-sm">Start Match</a>
-                                                {% endif %}
-                                            {% endif %}
+{% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
+    <a href="{% url 'judge-live-match' match.id %}?{{ request.GET.urlencode }}" class="btn btn-dark w-100 fw-bold shadow-sm">Enter Judge Panel</a>
+{% elif request.user.role == 'SCORER' %}
+    <a href="{% url 'scorer-select-corner' match.id %}?{{ request.GET.urlencode }}" class="btn btn-primary w-100 fw-bold shadow-sm">📱 Score Match</a>
+{% endif %}
+
+{% else %}
+    <span class="badge bg-light text-dark border p-2 mb-2 w-100 d-inline-block">Waiting to Start</span>
+    {% if request.user.role == 'ADMIN' or request.user.role == 'JUDGE' or request.user.is_superuser %}
+        <a href="{% url 'start-match' match.id %}?{{ request.GET.urlencode }}" class="btn btn-success w-100 fw-bold shadow-sm">Start Match</a>
+    {% endif %}
+{% endif %}
+                                          
                                         </div>
                                         
                                     </div>

@@ -210,81 +210,71 @@ class OfficialCreateView(AdminRequiredMixin, CreateView):
  
 # thangta/views.py
 from django.contrib.auth.decorators import login_required
-
-# @login_required(login_url='login')
-# def tournament_matches(request, tournament_id):
-#     """Unified filter-driven Fixtures and Matches page for all roles."""
-#     tournament = get_object_or_404(Tournament, id=tournament_id)
-    
-#     # 1. Start with ALL matches for this tournament
-#     matches = Match.objects.filter(tournament=tournament)
-    
-#     # 2. Capture the requested filters from the URL (GET parameters)
-#     event_type = request.GET.get('event_type', '')
-#     gender = request.GET.get('gender', '')
-#     age_category = request.GET.get('age_category', '')
-#     weight_category = request.GET.get('weight_category', '')
-#     ring_number = request.GET.get('ring_number', '')
-
-#     # 3. Apply the filters dynamically if they exist
-#     if event_type:
-#         matches = matches.filter(event_type=event_type)
-#     if gender:
-#         matches = matches.filter(gender=gender)
-#     if age_category:
-#         matches = matches.filter(age_category=age_category)
-#     if weight_category:
-#         matches = matches.filter(weight_category=weight_category)
-#     if ring_number:
-#         matches = matches.filter(ring_number=ring_number)
-
-#     # 4. Order them logically
-#     matches = matches.order_by('round_number', 'match_sequence')
-    
-#     # 5. Send the current filters back to the template so the dropdowns stay selected!
-#     current_filters = {
-#         'event_type': event_type,
-#         'gender': gender,
-#         'age_category': age_category,
-#         'weight_category': weight_category,
-#         'ring_number': ring_number
-#     }
-
-#     return render(request, 'tournament_matches.html', {
-#         'tournament': tournament,
-#         'matches': matches,
-#         'current_filters': current_filters
-#     })
-
+ 
 from django.views.decorators.http import require_POST
 # Make sure your other imports (redirect, get_object_or_404, etc.) are still there!
 
+from django.urls import reverse
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.views.decorators.http import require_POST
+# (Keep your other imports at the top)
+
+from django.urls import reverse
+from urllib.parse import urlencode
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.views.decorators.http import require_POST
+# (Make sure your custom decorators and models are imported at the top)
+from django.urls import reverse
+import urllib.parse
+
 @judge_required
-@require_POST  # 👈 This forces the view to ONLY accept direct button clicks!
+@require_POST   
 def update_match_winner(request, match_id):
     """Instantly declares a winner, calculates scores, flushes temp data, and auto-generates."""
     match = get_object_or_404(Match, id=match_id)
     
+    
+    # ==========================================
+    # 🚨 THE ULTIMATE FIX: URL Pass-Through
+    # ==========================================
+    base_url = reverse('tournament-matches', args=[match.tournament.id])
+
+    def get_redirect_url(target_round=None):
+        # 1. Grab the exact filters that arrived with the form submission
+        query_params = request.GET.copy()
+        
+        # 2. Add or update the target round
+        if target_round:
+            query_params['round'] = target_round
+            
+        # 3. Build the final clean string using Django's built-in encoder
+        query_string = query_params.urlencode()
+        
+        return f"{base_url}?{query_string}" if query_string else base_url
+    # ==========================================
     if match.is_completed:
         messages.info(request, "This match is already completed.")
-        return redirect('tournament-matches', tournament_id=match.tournament.id)
+        return redirect(get_redirect_url())
 
     winner_id = request.POST.get('winner_id')
     if winner_id:
         winner = get_object_or_404(Participant, id=winner_id)
         if winner == match.participant_red or winner == match.participant_blue:
             
-            # 1. Calculate & Save
+            # 1. Calculate final scores for the database
             final_red = calculate_corner_score(match, match.participant_red)
             final_blue = calculate_corner_score(match, match.participant_blue)
             
+            # Lock the match
             match.score_red = final_red
             match.score_blue = final_blue
             match.winner = winner
             match.is_completed = True
             match.save()
             
-            # 2. Flush Temp Data
+            # 2. Flush Temporary Scorer Data
             Score.objects.filter(match=match).delete()
             
             # 3. Auto-Generate Next Round Logic
@@ -294,8 +284,10 @@ def update_match_winner(request, match_id):
                 weight_category=match.weight_category, round_number=match.round_number
             )
             
+            # If all matches in this specific round are finished...
             if not category_matches.filter(is_completed=False).exists():
                 if category_matches.count() > 1:
+                    # Generate the next round!
                     success, msg = generate_next_round(
                         tournament=match.tournament, event_type=match.event_type,
                         age_category=match.age_category, weight_category=match.weight_category,
@@ -303,26 +295,25 @@ def update_match_winner(request, match_id):
                     )
                     if success:
                         messages.success(request, f"🏆 {winner.name} wins ({final_red} - {final_blue})! Round {match.round_number + 1} generated!")
-                        url = reverse('tournament-matches', args=[match.tournament.id])
-                        return redirect(f"{url}?round={match.round_number + 1}")
+                        return redirect(get_redirect_url(match.round_number + 1))
                 else:
+                    # It was the finals!
                     messages.success(request, f"🏆 {winner.name} wins the Final ({final_red} - {final_blue})! Category Complete.")
             else:
+                # Still waiting on other matches in this round to finish
                 messages.success(request, f"🏆 {winner.name} declared as the winner ({final_red} - {final_blue})!")
             
-            url = reverse('tournament-matches', args=[match.tournament.id])
-            return redirect(f"{url}?round={match.round_number}")
+            # Redirect to the CURRENT round
+            return redirect(get_redirect_url(match.round_number))
         else:
             messages.error(request, "Invalid winner selected.")
 
-    # Fallback if something goes wrong (no need to render an HTML page anymore)
-    return redirect('tournament-matches', tournament_id=match.tournament.id)
-# thangta/views.py
-
+    # Fallback if something goes wrong (invalid ID, etc.)
+    return redirect(get_redirect_url())
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
 from .models import Match
-from .services import generate_next_round  # <--- MUST ADD THIS IMPORT
+from .services import generate_next_round   
 
 @judge_required
 def auto_generate_next_round(request, match_id):
@@ -435,10 +426,20 @@ def judge_generate_fixtures(request, tournament_id, ring_number):
 
     return render(request, 'generate_fixtures.html', {'tournament': tournament, 'ring_number': ring_number})
 
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.urls import reverse
+# (Keep your other imports)
+
 @judge_required
 def start_match(request, match_id):
     """Flips the match to active and redirects to the Live Panel."""
     match = get_object_or_404(Match, id=match_id)
+    
+    # ==========================================
+    # 🚨 URL PASS-THROUGH: Catch incoming filters
+    # ==========================================
+    query_string = request.GET.urlencode()
     
     if not match.participant_blue:
         match.winner = match.participant_red
@@ -453,16 +454,25 @@ def start_match(request, match_id):
             print("Auto advance skipped/failed:", e)
             
         messages.success(request, f"BYE Match auto-completed. {match.participant_red.name} advances!")
-        return redirect('tournament-matches', tournament_id=match.tournament.id)
+        
+        # 🚨 Redirect back to bracket with filters
+        base_url = reverse('tournament-matches', args=[match.tournament.id])
+        return redirect(f"{base_url}?{query_string}" if query_string else base_url)
     
     
-    
-    if request.method == 'POST':
-        if not match.is_completed:
-            match.is_active = True
-            match.save()
-            return redirect('judge-live-match', match_id=match.id)
-    return redirect('judge-ring-matches', tournament_id=match.tournament.id, ring_number=match.ring_number)
+    # 🚨 THE FIX: Removed the POST check so your <a> tag link actually works!
+    if not match.is_completed:
+        match.is_active = True
+        match.save()
+        
+        # 🚨 Redirect into the Judge Panel with filters attached!
+        base_url = reverse('judge-live-match', args=[match.id])
+        return redirect(f"{base_url}?{query_string}" if query_string else base_url)
+        
+    # Fallback if the match was somehow already completed
+    base_url = reverse('tournament-matches', args=[match.tournament.id])
+    return redirect(f"{base_url}?{query_string}" if query_string else base_url)
+
 
 @judge_required
 def judge_live_match(request, match_id):
@@ -1209,95 +1219,101 @@ def fetch_foul_history(request, match_id):
     return render(request, 'scorer_foul_table.html', {'fouls': fouls})
 
 
+from django.urls import reverse
+from urllib.parse import urlencode
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.views.decorators.http import require_POST
+# (Make sure your imports are at the top)
+
 @judge_required
+@require_POST   
 def update_match_winner(request, match_id):
-    """Manually declares a winner, burns RAM scores to database, and auto-generates next round."""
+    """Instantly declares a winner, calculates scores, flushes temp data, and auto-generates."""
     match = get_object_or_404(Match, id=match_id)
     
+    # ==========================================
+    # 🚨 THE ULTIMATE URL BUILDER (Database Fallback)
+    # ==========================================
+    base_url = reverse('tournament-matches', args=[match.tournament.id])
+
+    def get_redirect_url(target_round=None):
+        # 1. Grab whatever filters came from the HTML button
+        params = request.GET.dict()
+        
+        # 2. SAFETY NET: If the HTML dropped the filters, ask the database!
+        if not params.get('event_type'):
+            if getattr(match, 'event_type', None): params['event_type'] = str(match.event_type)
+            if getattr(match, 'gender', None): params['gender'] = str(match.gender)
+            if getattr(match, 'age_category', None): params['age_category'] = str(match.age_category)
+            if getattr(match, 'weight_category', None): params['weight_category'] = str(match.weight_category)
+
+        # 3. Add the target round number
+        if target_round:
+            params['round'] = target_round
+
+        # 4. Glue it all together safely
+        query_string = urlencode(params)
+        return f"{base_url}?{query_string}" if query_string else base_url
+    # ==========================================
+
+    # Protect against double-clicks
     if match.is_completed:
         messages.info(request, "This match is already completed.")
-        return redirect('tournament-matches', tournament_id=match.tournament.id)
+        return redirect(get_redirect_url())
 
-    if request.method == 'POST':
-        winner_id = request.POST.get('winner_id')
-        if winner_id:
-            winner = get_object_or_404(Participant, id=winner_id)
-            if winner == match.participant_red or winner == match.participant_blue:
-                
-                # ==========================================
-                # 🚨 NEW: BURN THE RAM MATH INTO THE DATABASE
-                # ==========================================
-                match_state = state.get_or_create_match_state(match_id)
-                
-                grand_red = 0
-                grand_blue = 0
-                
-                for r_num, r_data in match_state.get('rounds', {}).items():
-                    r_red = 0
-                    r_blue = 0
-                    for sr_num, sr_data in r_data.get('subrounds', {}).items():
-                        if sr_data.get('red', {}).get('status') == 'COMPLETE':
-                            r_red += sr_data['red']['final_score']
-                        if sr_data.get('blue', {}).get('status') == 'COMPLETE':
-                            r_blue += sr_data['blue']['final_score']
-                    
-                    # Burn the Round Totals into the database columns
-                    if str(r_num) == '1':
-                        match.round_1_red = r_red
-                        match.round_1_blue = r_blue
-                    elif str(r_num) == '2':
-                        match.round_2_red = r_red
-                        match.round_2_blue = r_blue
-                    elif str(r_num) == '3':
-                        match.round_3_red = r_red
-                        match.round_3_blue = r_blue
-                        
-                    grand_red += r_red
-                    grand_blue += r_blue
-                    
-                # Burn the Grand Totals
-                match.score_red = grand_red
-                match.score_blue = grand_blue
-                # ==========================================
-
-                # Finalize the match state
-                match.winner = winner
-                match.is_completed = True
-                match.is_active = False
-                match.save()
-                
-                # 🚨 NOTE: I deleted the line that was erasing all the Score objects!
-                # The historical database is now safe.
-
-                category_matches = Match.objects.filter(
-                    tournament=match.tournament, event_type=match.event_type,
-                    gender=match.gender, age_category=match.age_category,
-                    weight_category=match.weight_category, round_number=match.round_number
-                )
-                
-                if not category_matches.filter(is_completed=False).exists():
-                    if category_matches.count() > 1:
-                        success, msg = generate_next_round(
-                            tournament=match.tournament, event_type=match.event_type,
-                            age_category=match.age_category, weight_category=match.weight_category,
-                            gender=match.gender, current_round=match.round_number, ring_number=match.ring_number
-                        )
-                        if success:
-                            messages.success(request, f"🏆 {winner.name} wins ({grand_red} - {grand_blue})! Round {match.round_number + 1} automatically generated!")
-                            url = reverse('tournament-matches', args=[match.tournament.id])
-                            return redirect(f"{url}?round={match.round_number + 1}")
-                    else:
-                        messages.success(request, f"🏆 {winner.name} wins the Final ({grand_red} - {grand_blue})! Category Complete.")
+    winner_id = request.POST.get('winner_id')
+    if winner_id:
+        winner = get_object_or_404(Participant, id=winner_id)
+        if winner == match.participant_red or winner == match.participant_blue:
+            
+            # 1. Calculate final scores for the database
+            final_red = calculate_corner_score(match, match.participant_red)
+            final_blue = calculate_corner_score(match, match.participant_blue)
+            
+            # Lock the match
+            match.score_red = final_red
+            match.score_blue = final_blue
+            match.winner = winner
+            match.is_completed = True
+            match.save()
+            
+            # 2. Flush Temporary Scorer Data
+            Score.objects.filter(match=match).delete()
+            
+            # 3. Auto-Generate Next Round Logic
+            category_matches = Match.objects.filter(
+                tournament=match.tournament, event_type=match.event_type,
+                gender=match.gender, age_category=match.age_category,
+                weight_category=match.weight_category, round_number=match.round_number
+            )
+            
+            # If all matches in this specific round are finished...
+            if not category_matches.filter(is_completed=False).exists():
+                if category_matches.count() > 1:
+                    # Generate the next round!
+                    success, msg = generate_next_round(
+                        tournament=match.tournament, event_type=match.event_type,
+                        age_category=match.age_category, weight_category=match.weight_category,
+                        gender=match.gender, current_round=match.round_number, ring_number=match.ring_number
+                    )
+                    if success:
+                        messages.success(request, f"🏆 {winner.name} wins ({final_red} - {final_blue})! Round {match.round_number + 1} generated!")
+                        return redirect(get_redirect_url(match.round_number + 1))
                 else:
-                    messages.success(request, f"🏆 {winner.name} declared as the winner ({grand_red} - {grand_blue})!")
-                
-                url = reverse('tournament-matches', args=[match.tournament.id])
-                return redirect(f"{url}?round={match.round_number}")
+                    # It was the finals!
+                    messages.success(request, f"🏆 {winner.name} wins the Final ({final_red} - {final_blue})! Category Complete.")
             else:
-                messages.error(request, "Invalid winner selected.")
+                # Still waiting on other matches in this round to finish
+                messages.success(request, f"🏆 {winner.name} declared as the winner ({final_red} - {final_blue})!")
+            
+            # Redirect to the CURRENT round
+            return redirect(get_redirect_url(match.round_number))
+        else:
+            messages.error(request, "Invalid winner selected.")
 
-    return render(request, 'match_update_score.html', {'match': match})
-
+    # Fallback if something goes wrong 
+    return redirect(get_redirect_url())
 
 
 from django.db.models import Avg
@@ -1419,8 +1435,7 @@ def select_ring(request, tournament_id):
         
     return render(request, 'select_ring.html', {'tournament': tournament})
 
-from django.shortcuts import get_object_or_404, redirect
-
+from django.shortcuts import render, get_object_or_404, redirect
 def tournament_matches(request, tournament_id):
     tournament = get_object_or_404(Tournament, id=tournament_id)
     
@@ -1439,10 +1454,13 @@ def tournament_matches(request, tournament_id):
 
     # 3. Only run the heavy database search if filters exist!
     if is_filtered:
+        # Save exact URL parameters for the redirect memory
+        request.session['saved_fixture_filters'] = request.GET.urlencode()
+        
         # Lock to THIS tournament AND their Session Ring
         matches = Match.objects.filter(tournament=tournament, ring_number=session_ring)
         
-        # Apply remaining GET filters
+        # Apply remaining GET filters dynamically
         if request.GET.get('event_type'):
             matches = matches.filter(event_type=request.GET.get('event_type'))
         if request.GET.get('gender'):
@@ -1452,7 +1470,9 @@ def tournament_matches(request, tournament_id):
         if request.GET.get('age_category'):
             matches = matches.filter(age_category=request.GET.get('age_category'))
 
+        # 🚨 THE FIX: Sort exactly once at the very end of the chain
         matches = matches.order_by('round_number', 'match_sequence')
+        
     else:
         # If no filters, send an empty list to trigger the HTML placeholder
         matches = Match.objects.none()
@@ -1470,7 +1490,7 @@ def tournament_matches(request, tournament_id):
         'matches': matches,
         'current_filters': current_filters,
         'session_ring': session_ring,
-        'is_filtered': is_filtered,  # 🚨 Critical for the HTML template!
+        'is_filtered': is_filtered,  
     })
 
 @admin_required

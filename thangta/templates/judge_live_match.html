@@ -101,23 +101,25 @@
 </div>
 <div class="mt-auto text-center pb-2">
  <div class="d-flex justify-content-center gap-4 mt-4 mb-5">
-    <form method="POST" action="{% url 'update-match-winner' match.id %}">
+    
+    <form method="POST" action="{% url 'update-match-winner' match.id %}?{{ request.GET.urlencode }}">
         {% csrf_token %}
         <input type="hidden" name="winner_id" value="{{ match.participant_red.id }}">
         <button type="submit" class="btn text-white fw-bold shadow" 
                 style="background-color: #dc3545; border: none; font-size: 1.5rem; padding: 15px 40px; border-radius: 12px; min-width: 250px;">
-          {{ match.participant_red.name }} Wins
+            {{ match.participant_red.name }} Wins
         </button>
     </form>
 
-    <form method="POST" action="{% url 'update-match-winner' match.id %}">
+    <form method="POST" action="{% url 'update-match-winner' match.id %}?{{ request.GET.urlencode }}">
         {% csrf_token %}
         <input type="hidden" name="winner_id" value="{{ match.participant_blue.id }}">
         <button type="submit" class="btn text-white fw-bold shadow" 
                 style="background-color: #0d6efd; border: none; font-size: 1.5rem; padding: 15px 40px; border-radius: 12px; min-width: 250px;">
-           {{ match.participant_blue.name }} Wins
+            {{ match.participant_blue.name }} Wins
         </button>
     </form>
+
 </div>
 </div>
 {% if match.current_round > 1 %}

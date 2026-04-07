@@ -256,8 +256,21 @@
                     if(overlayObj) overlayObj.style.display = "flex";
                     
                     // Redirect back to fixtures after 1.5 seconds
+                 // Redirect back to fixtures after 1.5 seconds
                     setTimeout(() => {
-                        window.location.href = "{% url 'tournamnet-matches'  %}";
+                        // 1. Get the base URL for this specific tournament
+                        let returnUrl = "{% url 'tournament-matches' match.tournament.id %}";
+                        
+                        // 2. Fetch the saved filters from the Django Session
+                        let savedFilters = "{{ request.session.saved_fixture_filters|default:''|safe }}";
+                        
+                        // 3. If they had filters, attach them to the URL!
+                        if (savedFilters) {
+                            returnUrl += "?" + savedFilters;
+                        }
+                        
+                        // 4. Send them back!
+                        window.location.href = returnUrl;
                     }, 1500);
                     return;
                 }
