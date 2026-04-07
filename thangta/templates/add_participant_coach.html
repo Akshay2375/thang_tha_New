@@ -5,7 +5,6 @@
     <title>Add New Participant</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        /* Slightly gray out readonly fields to match your design */
         input[readonly] {
             background-color: #f8f9fa !important;
             cursor: not-allowed;
@@ -111,21 +110,58 @@
     </div>
 </div>
 
+<div class="toast-container position-fixed top-0 end-0 p-4" style="z-index: 1055;">
+    <div id="systemToast" class="toast align-items-center border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body fw-bold fs-6" id="toastBody">
+                </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+    // ==========================================
+    // 🔔 GLOBAL NOTIFICATION CONTROLLER
+    // ==========================================
+    function showToast(message, type = 'success') {
+        const toastEl = document.getElementById('systemToast');
+        const toastBody = document.getElementById('toastBody');
+        
+        // Wipe old colors and apply the new one (danger for errors, success for good things)
+        toastEl.className = `toast align-items-center border-0 shadow-lg text-bg-${type}`;
+        toastBody.innerText = message;
+        
+        // Fire the Toast!
+        const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+        toast.show();
+    }
+
     document.addEventListener("DOMContentLoaded", function() {
+        
+        // 🚨 Catch Django Backend Messages automatically!
+        {% if messages %}
+            {% for message in messages %}
+                // Convert Django's "error" tag to Bootstrap's "danger" color
+                let msgType = "{{ message.tags }}" === "error" ? "danger" : "{{ message.tags|default:'info' }}";
+                showToast("{{ message|escapejs }}", msgType);
+            {% endfor %}
+        {% endif %}
+
+
         const dobInput = document.getElementById('dobInput');
         const ageInput = document.getElementById('ageInput');
         const ageGroupField = document.querySelector('select[name="age_group"]');
         const contactField = document.querySelector('input[name="contact"]');
 
         // ==========================================
-        // 1. DATE OF BIRTH (Optional Helper)
+        // 1. DATE OF BIRTH LOGIC
         // ==========================================
         if (dobInput && ageInput) {
             dobInput.addEventListener('change', function() {
-                if (!this.value) return; // Do nothing if they leave it blank
+                if (!this.value) return; 
 
                 const dob = new Date(this.value);
                 if (!isNaN(dob.getTime())) {
@@ -137,16 +173,14 @@
                         age--;
                     }
 
-                    // Put the calculated age into the Age field...
                     ageInput.value = age;
-                    // ...and explicitly tell the Age field that it just got updated!
                     ageInput.dispatchEvent(new Event('input'));
                 }
             });
         }
 
         // ==========================================
-        // 2. MANUAL AGE ENTRY & AUTO-SELECTOR
+        // 2. AGE & AUTO-SELECTOR LOGIC
         // ==========================================
         if (ageInput && ageGroupField) {
             ageInput.setAttribute('min', '1');
@@ -155,16 +189,15 @@
                 if (this.value !== "") {
                     const age = parseInt(this.value);
                     
-                    // 🚨 STRICT RULE: Age cannot be zero or negative
                     if (age < 1) {
-                        alert("Invalid Age. Participant must be at least 1 year old.");
+                        // 🚨 THE FIX: Beautiful Toast instead of ugly alert!
+                        showToast("Invalid Age. Participant must be at least 1 year old.", "danger");
                         this.value = ''; 
                         ageGroupField.value = ''; 
-                        if (dobInput) dobInput.value = ''; // Wipe bad DOB if it exists
+                        if (dobInput) dobInput.value = ''; 
                         return;
                     }
 
-                    // Instantly Auto-Select the correct Age Group!
                     if (!isNaN(age)) {
                         if (age < 14) {
                             ageGroupField.value = 'U14'; 
@@ -175,13 +208,13 @@
                         }
                     }
                 } else {
-                    ageGroupField.value = ''; // Clear group if they delete the age
+                    ageGroupField.value = ''; 
                 }
             });
         }
 
         // ==========================================
-        // 3. CONTACT NUMBER STRICT LOCKDOWN
+        // 3. CONTACT NUMBER LOGIC
         // ==========================================
         if (contactField) {
             contactField.setAttribute('maxlength', '10');
@@ -190,7 +223,6 @@
             contactField.setAttribute('title', 'Please enter exactly 10 digits');
 
             contactField.addEventListener('input', function(e) {
-                // Instantly destroy any character that is NOT a number (0-9)
                 this.value = this.value.replace(/\D/g, '');
             });
         }
