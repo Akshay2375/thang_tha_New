@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tournament Bracket Export</title>
+    <style>
+        /* ── Google Fonts must be FIRST ── */
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+        /* ── Page size ── */
+        @page { size: landscape; margin: 8mm; }
+
+        /* ════════════════════════════════════════════════
+           PRINT COLOR FIX — Force every browser to render
+           backgrounds, borders, and colors in print/PDF.
+           Must live outside @media print so it applies
+           to the rendering pipeline that feeds print.
+        ════════════════════════════════════════════════ */
+        * {
+            -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            box-sizing: border-box;
+        }
+
+        /* ── CSS Variables ── */
+        :root {
+            --red:       #c0392b;
+            --blue:      #2471a3;
+            --win-bg:    #d4edda;
+            --win-bdr:   #27ae60;
+            --dark:      #1a202c;
+            --slate:     #4a5568;
+            --muted:     #a0aec0;
+            --border:    #cbd5e0;
+            --surface:   #f0f4f8;
+            --white:     #ffffff;
+            --gold:      #d4a017;
+            --connector: #2d3748;
+            --hdr-bg:    #1a202c;
+        }
+
+        html, body { margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            background: #ffffff;
+            color: #1a202c;
+            font-size: 12px;
+            padding: 16px 20px;
+        }
+
+        /* ══════════════════════════════════════
+           HEADER
+        ══════════════════════════════════════ */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 3px solid #1a202c;
+            padding-bottom: 12px;
+            margin-bottom: 24px;
+        }
+        .header-left { display: flex; align-items: center; gap: 14px; }
+        .header-emblem {
+            width: 52px; height: 52px;
+            background-color: #1a202c !important;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px;
+        }
+        .header h1 {
+            font-family: 'Rajdhani', Arial, sans-serif;
+            font-size: 22px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1px; line-height: 1.1; margin: 0;
+        }
+        .header-sub {
+            font-size: 10px; color: #4a5568; margin-top: 3px;
+            font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .header-badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .badge {
+            background-color: #f0f4f8 !important;
+            border: 1px solid #cbd5e0; border-radius: 4px;
+            padding: 4px 10px; font-size: 10px; font-weight: 600;
+            color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .badge.highlight {
+            background-color: #1a202c !important;
+            color: #ffffff !important; border-color: #1a202c;
+        }
+
+        /* ══════════════════════════════════════
+           TOOLBAR (screen only)
+        ══════════════════════════════════════ */
+        .toolbar {
+            text-align: center; margin-bottom: 20px;
+            display: flex; gap: 10px; justify-content: center;
+        }
+        .toolbar button {
+            padding: 10px 22px; font-size: 14px; font-weight: 600;
+            border: none; border-radius: 6px; cursor: pointer;
+            font-family: 'Inter', Arial, sans-serif;
+        }
+        .btn-print { background-color: #1a202c !important; color: #ffffff !important; }
+        .btn-close  { background-color: #f0f4f8 !important; color: #4a5568; border: 1px solid #cbd5e0; }
+
+        /* ══════════════════════════════════════
+           BRACKET LAYOUT
+        ══════════════════════════════════════ */
+        .bracket-scroll { overflow-x: auto; padding-bottom: 12px; }
+        .bracket-container {
+            display: flex; flex-direction: row;
+            align-items: flex-start; gap: 0; min-width: max-content;
+        }
+        .round-column { display: flex; flex-direction: column; align-items: flex-start; }
+
+        /* Round label pill */
+        .round-label {
+            font-family: 'Rajdhani', Arial, sans-serif;
+            font-size: 12px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1px;
+            color: #ffffff !important;
+            background-color: #1a202c !important;
+            padding: 5px 12px; border-radius: 4px;
+            margin-bottom: 14px; width: 210px; text-align: center;
+        }
+
+        .match-cell {
+            display: flex; flex-direction: column;
+            align-items: flex-start; justify-content: center;
+            padding: 10px 0;
+        }
+        .match-row { display: flex; align-items: center; }
+
+        /* ══════════════════════════════════════
+           MATCH CARD
+        ══════════════════════════════════════ */
+        .match-box {
+            width: 210px;
+            border: 1.5px solid #1a202c;
+            border-radius: 7px; overflow: hidden;
+            background-color: #ffffff !important;
+        }
+
+        .match-meta {
+            background-color: #1a202c !important;
+            color: #ffffff !important;
+            padding: 4px 8px; font-size: 9px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.6px;
+            display: flex; justify-content: space-between;
+        }
+
+        /* Fighter rows */
+        .fighter {
+            display: flex; align-items: center;
+            justify-content: space-between;
+            padding: 7px 10px;
+            border-bottom: 1px solid #cbd5e0;
+            min-height: 34px;
+            background-color: #ffffff !important;
+        }
+        .fighter:last-of-type { border-bottom: none; }
+
+        /* Left-side coloured stripe — explicit hex, no variables in border shorthand */
+        .fighter.red  { border-left: 4px solid #c0392b !important; }
+        .fighter.blue { border-left: 4px solid #2471a3 !important; }
+        .fighter.bye  { border-left: 4px solid #a0aec0 !important; opacity: 0.7; font-style: italic; color: #a0aec0; }
+
+        /* Winner highlight — solid color, no alpha */
+        .fighter.winner {
+            background-color: #d4edda !important;
+            border-left-color: #27ae60 !important;
+            font-weight: 700;
+        }
+
+        .fighter-name {
+            font-size: 11px; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis; max-width: 135px;
+        }
+
+        .corner-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            flex-shrink: 0; margin-right: 6px; display: inline-block;
+        }
+        .red-dot  { background-color: #c0392b !important; }
+        .blue-dot { background-color: #2471a3 !important; }
+        .bye-dot  { background-color: #a0aec0 !important; }
+
+        .score-bubble {
+            font-size: 12px; font-weight: 700; min-width: 26px;
+            text-align: center;
+            background-color: #f0f4f8 !important;
+            border: 1px solid #cbd5e0; border-radius: 4px;
+            padding: 1px 5px; flex-shrink: 0; color: #1a202c;
+        }
+        .score-bubble.winner-score {
+            background-color: #27ae60 !important;
+            color: #ffffff !important; border-color: #27ae60;
+        }
+
+        /* Per-round breakdown */
+        .round-scores {
+            font-size: 8px; color: #a0aec0;
+            padding: 2px 10px 3px;
+            background-color: #f8f9fa !important;
+            display: flex; gap: 6px; flex-wrap: wrap;
+            border-top: 1px dashed #e2e8f0;
+        }
+        .round-scores span { white-space: nowrap; }
+        .round-scores strong { color: #4a5568; }
+
+        /* ══════════════════════════════════════
+           CONNECTOR LINE
+        ══════════════════════════════════════ */
+        .connector {
+            width: 120px; height: 2px;
+            background-color: #2d3748 !important;
+            flex-shrink: 0; position: relative;
+        }
+        .connector-text {
+            position: absolute; bottom: 4px; left: 6px;
+            font-size: 9px; font-weight: 700;
+            color: #c0392b !important;
+            white-space: nowrap; text-transform: uppercase; letter-spacing: .4px;
+        }
+        .connector-score {
+            color: #4a5568 !important;
+            font-size: 8px;
+            background-color: #e2e8f0 !important;
+            padding: 1px 4px; border-radius: 4px; margin-left: 4px;
+        }
+
+        /* ══════════════════════════════════════
+           CHAMPION BOX
+        ══════════════════════════════════════ */
+        .champion-box {
+            margin-left: 20px; align-self: center;
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+        }
+        .champion-label {
+            font-family: 'Rajdhani', Arial, sans-serif;
+            font-size: 15px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1px;
+            color: #d4a017 !important;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .champion-name {
+            font-size: 13px; font-weight: 600; color: #1a202c;
+            border: 2px solid #d4a017; border-radius: 6px;
+            padding: 8px 18px; text-align: center;
+        }
+
+        .empty { text-align: center; padding: 60px; color: #a0aec0; font-size: 14px; }
+
+        /* ══════════════════════════════════════
+           PRINT OVERRIDES
+           Re-assert every background explicitly
+           so Chrome/Edge/Firefox all comply.
+        ══════════════════════════════════════ */
+        @media print {
+            .no-print { display: none !important; }
+            html, body { padding: 0 !important; margin: 0 !important; }
+            .bracket-scroll { overflow: visible !important; }
+
+            .match-meta           { background-color: #1a202c !important; color: #ffffff !important; }
+            .round-label          { background-color: #1a202c !important; color: #ffffff !important; }
+            .header-emblem        { background-color: #1a202c !important; }
+            .badge.highlight      { background-color: #1a202c !important; color: #ffffff !important; }
+
+            .fighter              { background-color: #ffffff !important; }
+            .fighter.red          { border-left: 4px solid #c0392b !important; }
+            .fighter.blue         { border-left: 4px solid #2471a3 !important; }
+            .fighter.winner       { background-color: #d4edda !important; border-left-color: #27ae60 !important; }
+
+            .score-bubble         { background-color: #f0f4f8 !important; color: #1a202c !important; }
+            .score-bubble.winner-score { background-color: #27ae60 !important; color: #ffffff !important; }
+
+            .red-dot              { background-color: #c0392b !important; }
+            .blue-dot             { background-color: #2471a3 !important; }
+            .bye-dot              { background-color: #a0aec0 !important; }
+
+            .connector            { background-color: #2d3748 !important; }
+            .connector-text       { color: #c0392b !important; }
+            .connector-score      { background-color: #e2e8f0 !important; color: #4a5568 !important; }
+
+            .round-scores         { background-color: #f8f9fa !important; }
+            .match-box            { break-inside: avoid; border: 1.5px solid #1a202c !important; background-color: #ffffff !important; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Toolbar (hidden on print) -->
+<div class="toolbar no-print">
+    <button class="btn-print" onclick="window.print()">🖨 Save as PDF / Print</button>
+    <button class="btn-close"  onclick="window.close()">✕ Close Tab</button>
+</div>
+
+<!-- Page Header -->
+<div class="header">
+    <div class="header-left">
+        <div class="header-emblem">🥋</div>
+        <div>
+            <h1>{{ tournament.name }}</h1>
+            <div class="header-sub">Knockout Bracket · {{ tournament.start_date }}</div>
+        </div>
+    </div>
+    <div class="header-badges">
+        {% if filters.event   %}<span class="badge highlight">{{ filters.event }}</span>{% endif %}
+        {% if filters.gender  %}<span class="badge">{{ filters.gender }}</span>{% endif %}
+        {% if filters.age     %}<span class="badge">{{ filters.age }}</span>{% endif %}
+        {% if filters.weight  %}<span class="badge">{{ filters.weight }} Kg</span>{% endif %}
+        {% if not filters.event and not filters.gender and not filters.age and not filters.weight %}
+            <span class="badge">All Categories</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Bracket -->
+{% if bracket_data %}
+<div class="bracket-scroll">
+    <div class="bracket-container">
+
+        {% for round_num, matches in bracket_data.items %}
+        <div class="round-column">
+
+            <div class="round-label">
+                {% if forloop.last and total_rounds > 1 %}
+                    🏆 Final
+                {% elif forloop.revcounter == 2 and total_rounds > 2 %}
+                    Semi-Finals
+                {% elif forloop.revcounter == 3 and total_rounds > 3 %}
+                    Quarter-Finals
+                {% else %}
+                    Round {{ round_num }}
+                {% endif %}
+            </div>
+
+            {% for match in matches %}
+            <div class="match-cell">
+                <div class="match-row">
+
+                    <div class="match-box">
+                        <div class="match-meta">
+                           {% if match.match_sequence|stringformat:"s" == "1001" %}
+                                    🥇 GOLD FINAL
+                                {% elif match.match_sequence|stringformat:"s" == "1002" %}
+                                    🥉 BRONZE PLAYOFF
+                                {% else %}
+                                    Match {{ match.match_sequence }}
+                                {% endif %}
+                                (Ring {{ match.ring_number }})
+                        </div>
+
+                        <!-- Red corner -->
+                        <div class="fighter red {% if match.winner_id == match.participant_red_id %}winner{% endif %}">
+                            <div style="display:flex;align-items:center;overflow:hidden;">
+                                <span class="corner-dot red-dot"></span>
+                                <span class="fighter-name">{{ match.participant_red.name|default:"TBD" }}</span>
+                            </div>
+                            <span class="score-bubble {% if match.winner_id == match.participant_red_id %}winner-score{% endif %}">
+                                {{ match.grand_total_red }}
+                            </span>
+                        </div>
+
+                        <!-- Blue corner / BYE -->
+                        {% if match.participant_blue %}
+                        <div class="fighter blue {% if match.winner_id == match.participant_blue_id %}winner{% endif %}">
+                            <div style="display:flex;align-items:center;overflow:hidden;">
+                                <span class="corner-dot blue-dot"></span>
+                                <span class="fighter-name">{{ match.participant_blue.name }}</span>
+                            </div>
+                            <span class="score-bubble {% if match.winner_id == match.participant_blue_id %}winner-score{% endif %}">
+                                {{ match.grand_total_blue }}
+                            </span>
+                        </div>
+                        {% else %}
+                        <div class="fighter bye">
+                            <div style="display:flex;align-items:center;">
+                                <span class="corner-dot bye-dot"></span>
+                                <span class="fighter-name">BYE</span>
+                            </div>
+                            <span class="score-bubble">—</span>
+                        </div>
+                        {% endif %}
+
+                        <!-- Per-round breakdown -->
+                        {% if match.is_completed and match.participant_blue %}
+                        <div class="round-scores">
+                            {% if match.round_1_red or match.round_1_blue %}
+                            <span><strong>R1:</strong> {{ match.round_1_red }}–{{ match.round_1_blue }}</span>
+                            {% endif %}
+                            {% if match.round_2_red or match.round_2_blue %}
+                            <span><strong>R2:</strong> {{ match.round_2_red }}–{{ match.round_2_blue }}</span>
+                            {% endif %}
+                            {% if match.round_3_red or match.round_3_blue %}
+                            <span><strong>TB:</strong> {{ match.round_3_red }}–{{ match.round_3_blue }}</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div><!-- end match-box -->
+
+                    <!-- Connector arm -->
+                    {% if not forloop.parentloop.last %}
+                    <div class="connector">
+                        {% if match.winner %}
+                        <span class="connector-text">
+                            {{ match.winner.name|truncatechars:14 }}
+                            {% if match.winner == match.participant_red and match.grand_total_red > 0 %}
+                                <span class="connector-score">{{ match.grand_total_red }}</span>
+                            {% elif match.winner == match.participant_blue and match.grand_total_blue > 0 %}
+                                <span class="connector-score">{{ match.grand_total_blue }}</span>
+                            {% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+            {% endfor %}
+
+        </div>
+        {% endfor %}
+
+        {% if champion %}
+        <div class="champion-box">
+            <div class="champion-label">🏆 Champion</div>
+            <div class="champion-name">{{ champion.name }}</div>
+            <div style="font-size:10px;color:#a0aec0;margin-top:2px;">{{ champion.district }}</div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+{% else %}
+<div class="empty">
+    <p style="font-size:32px;margin-bottom:12px;">🥋</p>
+    <p>No matches found for the selected category.</p>
+    <p style="font-size:11px;margin-top:6px;color:#a0aec0;">Adjust the filters and try again.</p>
+</div>
+{% endif %}
+
+<script>
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () {
+            setTimeout(function () { window.print(); }, 500);
+        });
+    } else {
+        window.onload = function () { setTimeout(function () { window.print(); }, 700); };
+    }
+</script>
+</body>
+</html>

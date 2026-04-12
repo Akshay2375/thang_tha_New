@@ -1868,3 +1868,85 @@ def public_live_match(request, match_id):
     return render(request, 'public_live_match.html', {
         'match': match,
     })
+    
+    
+from django.shortcuts import render, get_object_or_404
+from .models import Tournament, Match
+
+
+def export_bracket_pdf(request, tournament_id):
+    """
+    Renders a printable knockout-bracket for a single category.
+
+    URL params (all optional):
+        event_type, gender, age_category, weight_category
+    """
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+
+    # ── 1. Read category filters from the query string ──────────────────────
+    event_type      = request.GET.get('event_type')
+    gender          = request.GET.get('gender')
+    age_category    = request.GET.get('age_category')
+    weight_category = request.GET.get('weight_category')
+
+    # ── 2. Fetch and filter matches ─────────────────────────────────────────
+    matches = Match.objects.filter(tournament=tournament).select_related(
+        'participant_red',
+        'participant_blue',
+        'winner',
+    )
+
+    if event_type:      matches = matches.filter(event_type=event_type)
+    if gender:          matches = matches.filter(gender=gender)
+    if age_category:    matches = matches.filter(age_category=age_category)
+    if weight_category: matches = matches.filter(weight_category=weight_category)
+
+    matches = matches.order_by('round_number', 'match_sequence')
+
+    # ── 3. Group by round_number ─────────────────────────────────────────────
+    bracket_data: dict[int, list[Match]] = {}
+    for match in matches:
+        bracket_data.setdefault(match.round_number, []).append(match)
+
+    # ── 4. Derive bracket-level metadata ────────────────────────────────────
+    total_rounds = len(bracket_data)
+
+    # Champion = winner of the highest-round completed match (if any)
+    champion = None
+    if bracket_data:
+        final_round_matches = bracket_data.get(max(bracket_data.keys()), [])
+        for m in final_round_matches:
+            if m.winner:
+                champion = m.winner
+                break
+
+    # Human-readable round labels (passed to template so no logic leaks into HTML)
+    round_labels: dict[int, str] = {}
+    for rn in bracket_data:
+        remaining = total_rounds - rn          # how many rounds come AFTER this one
+        if remaining == 0 and total_rounds > 1:
+            round_labels[rn] = "Final"
+        elif remaining == 1 and total_rounds > 2:
+            round_labels[rn] = "Semi-Finals"
+        elif remaining == 2 and total_rounds > 3:
+            round_labels[rn] = "Quarter-Finals"
+        else:
+            round_labels[rn] = f"Round {rn}"
+
+    # ── 5. Render ────────────────────────────────────────────────────────────
+    context = {
+        'match':match,
+        # 'tournament': tournament,
+        'bracket_data': bracket_data,        # {round_num: [Match, ...]}
+        'round_labels': round_labels,        # {round_num: "Round 1" | "Final" | …}
+        'total_rounds': total_rounds,
+        'champion': champion,
+        'filters': {
+            'event':  event_type,
+            'gender': gender,
+            'age':    age_category,
+            'weight': weight_category,
+        },
+    }
+
+    return render(request, 'bracket_export.html', context)

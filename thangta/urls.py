@@ -84,6 +84,6 @@ path('match/<int:match_id>/flag-live-score/', flag_live_score, name='flag-live-s
 path('match/<int:match_id>/watch/',public_live_match, name='public-live-match'),
 
 
-
+path('tournaments/<int:tournament_id>/export-bracket/',  export_bracket_pdf, name='export-bracket'),
 
 ]

@@ -107,6 +107,17 @@
     </div>
     
 </form>
+<div class="col-md-auto d-flex gap-2">
+    <button type="submit" class="btn btn-dark fw-bold shadow-sm px-4">Filter</button>
+    <a href="{% url 'tournament-matches' tournament.id %}" class="btn btn-outline-secondary shadow-sm">Clear</a>
+    
+    {% if is_filtered %}
+        <a href="{% url 'export-bracket' tournament.id %}?{{ request.GET.urlencode }}" class="btn btn-danger fw-bold shadow-sm" target="_blank">
+            📄 Export PDF
+        </a>
+    {% endif %}
+</div>
+
         </div>
     </div>
 
